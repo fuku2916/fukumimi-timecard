@@ -1,0 +1,1713 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>クリニック タイムカード V33</title>
+<style>
+  :root{
+    --bg:#10402c; --panel:#ffffff; --ink:#1f2a24; --muted:#6b7c72;
+    --line:#e3ebe5; --brand:#2f7d5b; --brand-d:#235c43;
+    --in:#16a34a; --out:#c2792f; --warn:#c0473a; --soft:#eef3ef;
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  body{margin:0;font-family:-apple-system,"Hiragino Kaku Gothic ProN","Yu Gothic",sans-serif;
+       background:#eef2ee;color:var(--ink)}
+  header.app{background:linear-gradient(180deg,#15532f,#123f25);color:#fff;padding:11px 18px;display:flex;align-items:center;gap:16px;flex-wrap:wrap;box-shadow:0 1px 0 rgba(0,0,0,.15)}
+  header.app h1{font-size:16px;margin:0;font-weight:700;letter-spacing:.5px;display:flex;align-items:center;gap:10px}
+  .brandlogo{display:inline-flex;align-items:center;gap:8px;cursor:pointer;padding:4px 10px 4px 4px;border-radius:10px;transition:.15s}
+  .brandlogo:hover{background:rgba(255,255,255,.10)}
+  .brandlogo .mark{font-size:20px}
+  .brandlogo .org{font-size:18px;font-weight:800;letter-spacing:1px}
+  .apptitle{font-weight:500;opacity:.82;font-size:14px;border-left:1px solid rgba(255,255,255,.25);padding-left:14px}
+  .apptitle .ver{opacity:.6;font-weight:400;font-size:12px;margin-left:6px}
+  .clock{margin-left:auto;font-variant-numeric:tabular-nums;font-size:30px;font-weight:700;opacity:.95;line-height:1.1}
+  .roles{display:flex;gap:6px;background:rgba(255,255,255,.10);padding:4px;border-radius:10px}
+  .roles button{background:transparent;border:0;color:#d7e6dd;padding:8px 14px;border-radius:8px;font-size:13px;cursor:pointer}
+  .roles button.active{background:#fff;color:var(--brand-d);font-weight:700}
+  .sel{background:rgba(255,255,255,.12);color:#fff;border:1px solid rgba(255,255,255,.25);border-radius:8px;padding:7px 10px;font-size:13px}
+  .sel option{color:#1f2a24}
+  main{max-width:1100px;margin:0 auto;padding:16px}
+  .view{display:none}
+  .view.active{display:block}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:16px;margin-bottom:16px}
+  .card h2{margin:0 0 12px;font-size:15px}
+  .muted{color:var(--muted);font-size:13px}
+
+  /* iPad打刻 */
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(96px,1fr));gap:10px}
+  .tile{position:relative;border:1px solid var(--line);border-radius:12px;background:#fff;padding:10px 6px;
+        text-align:center;cursor:pointer;transition:.12s;display:flex;flex-direction:column;justify-content:center;align-items:center;gap:5px}
+  .tile:active{transform:scale(.96)}
+  .tile.working{border-color:var(--in);background:#f0fdf4}
+  /* アイコン：個人の色/デザインを使い、状態は明るさで表現 */
+  .avatar{width:40px;height:40px;border-radius:50%;display:flex;align-items:center;justify-content:center;
+          font-size:18px;font-weight:700;color:#fff;background:#64748b;transition:.15s}
+  .avatar.sq{border-radius:12px}                              /* 四角デザイン */
+  .avatar.ring{border:3px solid #fff;box-shadow:0 0 0 2px currentColor}
+  .tile .avatar{filter:grayscale(.95);opacity:.45}           /* 未出勤：グレーで薄い */
+  .tile.working .avatar{filter:none;opacity:1}               /* 勤務中：はっきり色付き */
+  .tile.done .avatar{filter:none;opacity:.4}                 /* 勤務終了：色はそのまま薄く */
+  .tname{font-weight:600;font-size:13px;line-height:1.2}
+  .badge{font-size:10px;border-radius:999px;padding:2px 7px;display:inline-block}
+  .badge.in{background:#dcfce7;color:#166534}
+  .badge.off{background:#f1f5f9;color:#64748b}
+  .tile.done .badge.off{background:#dcfce7;color:#16a34a}
+
+  /* modal */
+  .modal-bg{position:fixed;inset:0;background:rgba(15,23,42,.55);display:none;align-items:center;justify-content:center;z-index:50;padding:20px}
+  .modal-bg.show{display:flex}
+  .modal{background:#fff;border-radius:18px;padding:24px;width:100%;max-width:380px;text-align:center}
+  .modal .avatar{width:72px;height:72px;font-size:28px;margin-bottom:8px}
+  .modal h3{margin:6px 0 2px;font-size:22px}
+  .bigbtn{display:block;width:100%;border:0;border-radius:14px;padding:20px;font-size:22px;font-weight:800;color:#fff;margin-top:12px;cursor:pointer}
+  .bigbtn.in{background:var(--in)}
+  .bigbtn.out{background:var(--out)}
+  .bigbtn:disabled{background:#cbd5e1;cursor:not-allowed}
+  .linkbtn{background:none;border:0;color:var(--muted);margin-top:14px;font-size:14px;cursor:pointer;text-decoration:underline}
+  .toast{position:fixed;left:50%;bottom:32px;transform:translateX(-50%);background:#0f172a;color:#fff;
+         padding:14px 22px;border-radius:12px;font-size:16px;z-index:60;opacity:0;transition:.3s;pointer-events:none}
+  .toast.show{opacity:1}
+
+  /* tables */
+  table{width:100%;border-collapse:collapse;font-size:13px}
+  th,td{padding:8px 10px;border-bottom:1px solid var(--line);text-align:left;white-space:nowrap}
+  th{color:var(--muted);font-weight:600;font-size:12px}
+  .pill{font-size:11px;padding:2px 8px;border-radius:999px;font-weight:600}
+  .pill.ok{background:#dcfce7;color:#166534}
+  .pill.late{background:#fef3c7;color:#92400e}
+  .pill.over{background:#ffe4e6;color:#9f1239}
+  .pill.dev{background:#fee2e2;color:#991b1b}
+  .pill.closed{background:#e0e7ff;color:#3730a3}
+  .tile.closed{border-style:dashed;border-color:#a5b4fc;background:#eef2ff}
+  .tile.closed .badge.off{background:#e0e7ff;color:#3730a3}
+  .btn{background:var(--brand);color:#fff;border:0;border-radius:9px;padding:9px 14px;font-size:13px;font-weight:600;cursor:pointer}
+  .btn.ghost{background:#fff;color:var(--brand);border:1px solid var(--brand)}
+  .btn.mini{padding:5px 10px;font-size:12px}
+  .btn.g{background:var(--in)} .btn.r{background:var(--warn)}
+  .row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+  .kpi{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:12px}
+  .kpi .box{background:var(--soft);border-radius:12px;padding:14px}
+  .kpi .n{font-size:24px;font-weight:800}
+  .kpi .l{font-size:12px;color:var(--muted)}
+  input,select.f{border:1px solid var(--line);border-radius:8px;padding:8px;font-size:13px}
+  .tabs{display:flex;gap:6px;margin-bottom:14px;flex-wrap:wrap}
+  .tabs button{border:1px solid var(--line);background:#fff;border-radius:999px;padding:8px 14px;font-size:13px;cursor:pointer}
+  .tabs button.active{background:var(--ink);color:#fff;border-color:var(--ink)}
+  .note{background:#fffbeb;border:1px solid #fde68a;border-radius:10px;padding:10px 12px;font-size:12px;color:#92400e;margin-top:10px}
+
+  /* 診療カレンダー */
+  .cal-layout{display:flex;gap:18px;flex-wrap:wrap;align-items:flex-start}
+  .cal-month{flex:1 1 460px;min-width:320px}
+  .cal-detail{flex:1 1 300px;min-width:260px}
+  .cal-head{display:flex;align-items:center;gap:10px;margin-bottom:10px}
+  .cal-head .mtitle{font-size:26px;font-weight:800;line-height:1}
+  .cal-head .mtitle small{font-size:13px;font-weight:600;color:var(--muted);margin-left:6px}
+  .cal-nav{border:1px solid var(--line);background:#fff;border-radius:8px;width:34px;height:34px;font-size:16px;cursor:pointer}
+  .cal-grid{display:grid;grid-template-columns:repeat(7,1fr);border-left:1px solid var(--line);border-top:1px solid var(--line)}
+  .cal-grid .dow{font-size:12px;font-weight:700;padding:6px 4px;text-align:left;border-right:1px solid var(--line);border-bottom:1px solid var(--line);background:#f8fafc}
+  .dow.sun{color:#dc2626}.dow.sat{color:#2563eb}
+  .cal-cell{min-height:66px;border-right:1px solid var(--line);border-bottom:1px solid var(--line);padding:4px 5px;cursor:pointer;position:relative;background:#fff}
+  .cal-cell:hover{background:#f8fafc}
+  .cal-cell.out{background:#f8fafc}
+  .cal-cell.out .dnum{color:#cbd5e1}
+  .cal-cell.sel{outline:2px solid var(--brand);outline-offset:-2px}
+  .cal-cell .dnum{font-weight:700;font-size:13px}
+  .cal-cell .mk{display:block;font-size:10px;color:#3730a3;background:#e0e7ff;border-radius:4px;padding:0 4px;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .cal-cell .mk.doc{color:#1d4ed8;background:#dbeafe}
+  .cal-cell.today .dnum{background:var(--brand);color:#fff;border-radius:50%;padding:0 5px}
+  .sch-table{width:100%;table-layout:fixed}
+  .sch-table th:first-child{width:38px}
+  .sch-table td .stat-○{color:#dc2626;font-weight:700}
+  .sch-table td .stat-休診{color:#2563eb;font-weight:700}
+  .sch-table td .stat-なし{color:#94a3b8}
+  .sch-table td{vertical-align:top;padding:6px 4px}
+  .sch-table input,.sch-table select{font-size:12px;padding:4px;width:100%;display:block;margin:0 0 3px;box-sizing:border-box}
+  /* ===== ビー玉プール（出退勤） ===== */
+  .pool{position:relative;width:100%;height:min(72vh,720px);border-radius:18px;overflow:hidden;
+    border:1px solid var(--line);touch-action:none;
+    background:linear-gradient(180deg,#e9f7ef 0%,#e9f7ef 38%,#f4f7f5 60%,#eef1ee 100%)}
+  .pool-zone{position:absolute;left:12px;font-size:12px;font-weight:700;letter-spacing:.04em;pointer-events:none}
+  .pool-zone.top{top:10px;color:#16a34a}
+  .pool-zone.bottom{bottom:10px;color:#8a9a90}
+  .marble{position:absolute;border-radius:50%;display:flex;align-items:center;justify-content:center;
+    color:#fff;font-weight:700;text-align:center;line-height:1.05;cursor:grab;user-select:none;-webkit-user-select:none;
+    box-shadow:inset -7px -9px 16px rgba(0,0,0,.28), inset 7px 9px 16px rgba(255,255,255,.4), 0 6px 12px rgba(0,0,0,.18);
+    will-change:left,top,transform}
+  .marble .nm{padding:3px;text-shadow:0 1px 2px rgba(0,0,0,.4);overflow:hidden;word-break:break-word}
+  .marble .em{font-size:1.2em;line-height:1;display:block;margin-bottom:1px}
+  .marble.working{box-shadow:inset -7px -9px 16px rgba(0,0,0,.22), inset 9px 11px 18px rgba(255,255,255,.55), 0 0 0 4px rgba(34,197,94,.55), 0 10px 20px rgba(0,0,0,.22)}
+  .marble.done{opacity:.5}
+  .marble.closed{box-shadow:inset -7px -9px 16px rgba(0,0,0,.22), inset 7px 9px 16px rgba(255,255,255,.4), 0 0 0 3px #a5b4fc, 0 6px 12px rgba(0,0,0,.18)}
+  .marble.grab{cursor:grabbing;z-index:5}
+  .marble.pop{animation:mpop .9s cubic-bezier(.34,1.4,.5,1)}
+  @keyframes mpop{0%{transform:scale(1)}35%{transform:scale(1.14)}70%{transform:scale(.98)}100%{transform:scale(1)}}
+  .marble.inflate{animation:minflate 1.1s cubic-bezier(.18,1.5,.4,1)}
+  @keyframes minflate{0%{transform:scale(.7)}45%{transform:scale(1.32)}72%{transform:scale(.96)}100%{transform:scale(1)}}
+</style>
+</head>
+<body>
+<header class="app">
+  <h1>
+    <span class="brandlogo" id="brandLogo" title="iPad打刻画面に戻る"><span class="mark">🏥</span><span class="org">福耳会</span></span>
+    <span class="apptitle">クリニック タイムカード<span class="ver">V33</span></span>
+  </h1>
+  <div class="roles">
+    <button data-role="ipad" class="active">iPad打刻</button>
+    <button data-role="admin">管理者</button>
+  </div>
+  <select id="locSel" class="sel"></select>
+  <div class="clock" id="clock"></div>
+</header>
+
+<main>
+  <!-- ===== iPad 打刻 ===== -->
+  <section class="view active" id="view-ipad">
+    <div class="card">
+      <div class="row" style="align-items:center;margin-bottom:8px">
+        <h2 style="margin:0">出退勤打刻</h2>
+        <span class="muted" style="font-size:12px;margin-left:8px">名前のビー玉をタップして出勤・退勤。出勤すると上へふわっと浮かびます。</span>
+        <button class="btn ghost mini" id="rollL" style="margin-left:auto" title="押している間だけ左へ転がる（←キーでも可）">◀ 左</button>
+        <button class="btn ghost mini" id="rollR" title="押している間だけ右へ転がる（→キーでも可）">右 ▶</button>
+        <button class="btn ghost mini" id="tiltBtn" title="iPadなど傾きセンサーのある端末用">🎲 傾き(iPad)</button>
+        <button class="btn ghost mini" id="shakeBtn">シャッフル</button>
+      </div>
+      <div class="row" style="font-size:12px;color:var(--muted);margin-bottom:10px;gap:14px">
+        <span>⬆ 上にいる人＝<b style="color:var(--in)">出勤中</b></span>
+        <span>⬇ 下にいる人＝<b>未出勤</b>／<span style="opacity:.55">退勤済（うすい）</span></span>
+        <span style="margin-left:auto">※ MacBookでは ◀▶ ボタンか矢印キー（←→）で転がせます。色・絵文字は各自のスマホ「アイコン設定」で。</span>
+      </div>
+      <div class="pool" id="marblePool">
+        <div class="pool-zone top">⬆ 出勤中</div>
+        <div class="pool-zone bottom">⬇ 未出勤</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===== スタッフ スマホ ===== -->
+  <section class="view" id="view-staff">
+    <!-- 認証ゲート（本人だけが自分の情報を見られる） -->
+    <div class="card" id="staffLogin" style="max-width:420px;margin:24px auto">
+      <h2 style="margin:0 0 4px">勤務状況の確認</h2>
+      <p class="muted" style="margin:0 0 14px">本人確認のため、氏名とPINを入力してください。他の人の情報は表示されません。</p>
+      <label style="display:block;margin-bottom:10px">氏名<br><select id="loginStaff" class="f" style="width:100%"></select></label>
+      <label style="display:block;margin-bottom:10px">PIN<br><input id="loginPin" type="password" inputmode="numeric" maxlength="8" placeholder="シフトアプリで設定したPIN" style="width:100%"></label>
+      <label style="display:flex;align-items:center;gap:8px;margin-bottom:12px;font-size:13px;color:var(--muted)"><input type="checkbox" id="loginCloud"> スマホから利用（クラウドの自分のデータを取得）</label>
+      <button class="btn" id="loginBtn" style="width:100%;padding:12px;font-size:15px">確認する</button>
+      <div id="loginMsg" style="color:var(--warn);font-size:13px;margin-top:8px;min-height:18px"></div>
+      <div class="note">PINはシフト管理アプリのマイページで各自が設定したものです。未取込/未設定の場合はデモPIN「0000」で確認できます。スマホからの利用は、共有タブレットで一度「クラウドへ保存」した後に有効です。</div>
+    </div>
+    <!-- 本人ページ本体（認証後のみ表示） -->
+    <div id="staffBody" style="display:none">
+    <div class="card">
+      <div class="row">
+        <h2 style="margin:0">本人ページ ― <span id="meName"></span></h2>
+        <button class="btn ghost mini" id="logoutBtn" style="margin-left:auto">ログアウト</button>
+      </div>
+      <div class="kpi" style="margin-top:14px">
+        <div class="box"><div class="n" id="meStatus">—</div><div class="l">現在の状態</div></div>
+        <div class="box"><div class="n" id="meMonthH">—</div><div class="l">今月の労働時間</div></div>
+        <div class="box"><div class="n" id="meLeave">—</div><div class="l" id="meLeaveNote">有給 残日数</div></div>
+        <div class="box"><div class="n" id="meDesired">—</div><div class="l">希望上限まで</div></div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="tabs" id="staffTabs">
+        <button data-t="hist" class="active">打刻履歴</button>
+        <button data-t="leave">有給申請</button>
+        <button data-t="fix">打刻の修正申告</button>
+        <button data-t="icon">アイコン設定</button>
+      </div>
+      <div id="staffPane"></div>
+    </div>
+    </div>
+  </section>
+
+  <!-- ===== 管理者 ===== -->
+  <section class="view" id="view-admin">
+    <div class="card">
+      <h2>本日のダッシュボード</h2>
+      <div class="kpi">
+        <div class="box" style="cursor:pointer" title="ダブルクリックで一覧" ondblclick="kpiDetail('working')"><div class="n" id="adWorking">—</div><div class="l">勤務中 ▸</div></div>
+        <div class="box" style="cursor:pointer" title="ダブルクリックで一覧" ondblclick="kpiDetail('pending')"><div class="n" id="adPending">—</div><div class="l">未承認の申請 ▸</div></div>
+        <div class="box" style="cursor:pointer" title="ダブルクリックで一覧" ondblclick="kpiDetail('alert')"><div class="n" id="adAlert">—</div><div class="l">法定アラート ▸</div></div>
+        <div class="box" style="cursor:pointer" title="ダブルクリックで一覧" ondblclick="kpiDetail('dev')"><div class="n" id="adDev">—</div><div class="l">退勤時間の中央値からの逸脱 ▸</div></div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="tabs" id="adminTabs">
+        <button data-t="cal" class="active">診療カレンダー</button>
+        <button data-t="work">勤務状況の確認</button>
+        <button data-t="diff">シフト差異 / 法定</button>
+        <button data-t="appr">申請の承認 <span id="apprCount" style="background:var(--warn);color:#fff;border-radius:999px;padding:1px 7px;font-size:11px;display:none"></span></button>
+        <button data-t="median">診察終了 中央値</button>
+        <button data-t="point">ポイント判定</button>
+        <button data-t="csv">税理士提出データ / CSV</button>
+        <button data-t="shift">シフト入力</button>
+        <button data-t="import">シフトアプリからデータ取り込み</button>
+        <button data-t="hours">診察時間の設定</button>
+        <button data-t="staffset">スタッフ設定</button>
+      </div>
+      <div id="adminPane"></div>
+    </div>
+  </section>
+</main>
+
+<!-- modal -->
+<div class="modal-bg" id="modalBg">
+  <div class="modal" id="modalBox"></div>
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+/* ============ サンプルデータ ============ */
+const LOCATIONS = [
+  {id:'ekimae',   name:'京都駅前耳鼻咽喉科アレルギー科クリニック', short:'駅前'},
+  {id:'iguchi',   name:'いぐちクリニック', short:'いぐち'},
+  {id:'demachi',  name:'出町柳こどもクリニック', short:'出町柳こども'},
+  {id:'karasuma', name:'烏丸今出川みずたに呼吸器内科・外科クリニック', short:'烏丸今出川'},
+];
+const CSV_HEADER=["スタッフコード", "姓 名", "所属グループ名", "実働日数", "欠勤回数", "遅刻回数", "早退回数", "実労働時間", "休憩時間", "遅刻時間", "早退時間", "実シフト外労働時間", "実残業時間", "実深夜時間", "有休日数", "月末有休残", "有休時間", "（内訳）夜勤務"];
+const MONTHLY_DATA={"2026-05": [["0001002", "大滝 雅子", "京都駅前耳鼻咽喉科アレルギー科クリニック", "9", "", "5", "", "51:48:00", "", "0:22", "", "0:13", "", "", "2", "13", "8:00", "15:00"], ["0001004", "小島 憲", "いぐちクリニック", "10", "", "", "", "34:34:00", "", "", "", "0:26", "", "", "", "", "", ""], ["0001012", "山地 かえ子", "いぐちクリニック", "15", "", "", "", "60:15:00", "1:49", "", "", "0:02", "", "", "", "28.5", "", ""], ["0001015", "高野 篤子", "いぐちクリニック", "18", "", "", "", "149:06:00", "17:00", "", "", "149:06:00", "14:39", "", "1", "28.5", "7:30", ""], ["0001020", "水鳥 和美", "いぐちクリニック", "12", "", "", "", "44:27:00", "", "", "", "", "", "", "", "37", "", ""], ["0001021", "宮城 喜代子", "いぐちクリニック", "18", "", "", "", "125:50:00", "30:16:00", "", "", "1:12", "1:28", "", "", "28.5", "", ""], ["0001031", "伊藤 壽一", "いぐちクリニック", "13", "", "", "", "66:20:00", "15:41", "", "", "0:28", "", "", "", "", "", ""], ["0001036", "中川 茉耶", "京都駅前耳鼻咽喉科アレルギー科クリニック", "18", "", "", "", "127:53:00", "13:26", "", "", "127:53:00", "2:58", "", "1", "29.5", "7:30", ""], ["0001041", "芳賀 ゆき", "いぐちクリニック", "16", "", "1", "", "63:40:00", "1:47", "0:12", "", "0:40", "", "", "1", "15", "3:30", "2:10"], ["0001075", "吉田 美帆", "京都駅前耳鼻咽喉科アレルギー科クリニック", "19", "", "", "", "136:25:00", "14:34", "", "", "10:39", "8:15", "", "0.5", "12.5", "3:30", ""], ["0001123", "竹内 万理恵", "いぐちクリニック", "4", "", "", "", "14:24", "", "", "", "0:50", "", "", "", "", "", ""], ["0001124", "森 亜弓", "いぐちクリニック", "15", "", "1", "", "56:14:00", "", "0:02", "", "0:11", "", "", "", "17", "", ""], ["0001125", "藤田 琴恵", "京都駅前耳鼻咽喉科アレルギー科クリニック", "", "", "", "", "", "", "", "", "", "", "", "", "", "", ""], ["0001127", "藤井 あおい", "いぐちクリニック", "19", "", "", "", "127:56:00", "33:38:00", "", "", "0:32", "1:08", "", "", "8", "", ""], ["0001133", "小形 知恵子", "いぐちクリニック", "18", "", "1", "", "122:48:00", "37:00:00", "0:01", "", "0:17", "0:38", "", "", "14", "", ""], ["0001134", "小池 陽子", "京都駅前耳鼻咽喉科アレルギー科クリニック", "", "", "", "", "", "", "", "", "", "", "", "", "18.5", "", ""], ["0001142", "藤井 ひな乃", "京都駅前耳鼻咽喉科アレルギー科クリニック", "17", "", "", "", "115:52:00", "14:48", "", "", "5:40", "4:08", "", "1", "9.5", "7:30", ""], ["0001150", "山本 さゆり", "京都駅前耳鼻咽喉科アレルギー科クリニック", "2", "", "", "", "6:36", "", "", "", "", "", "", "", "", "", ""], ["0001157", "伊藤 有美", "出町柳こどもクリニック", "17", "", "", "", "110:48:00", "15:57", "", "", "5:15", "1:22", "", "0.5", "14.5", "3:30", ""], ["0001164", "松原 由歩", "京都駅前耳鼻咽喉科アレルギー科クリニック", "11", "", "", "", "37:41:00", "", "", "", "0:43", "", "", "", "", "", ""], ["0001165", "菅 早知子", "京都駅前耳鼻咽喉科アレルギー科クリニック", "10", "", "", "", "33:15:00", "", "", "", "0:10", "", "", "", "", "", ""], ["0001167", "勝本 暢子", "京都駅前耳鼻咽喉科アレルギー科クリニック", "19", "", "1", "", "154:23:00", "20:32", "0:02", "", "10:02", "10:37", "", "", "8.5", "", ""], ["0001169", "橋口 弘美", "京都駅前耳鼻咽喉科アレルギー科クリニック", "13", "", "", "", "55:01:00", "", "", "", "3:19", "", "", "1", "8", "3:30", ""], ["0001174", "西條 美和", "烏丸今出川みずたに呼吸器内科・外科クリニック", "18", "", "", "", "131:30:00", "21:18", "", "", "2:00", "2:34", "", "", "5", "", ""], ["0001181", "西本 仁", "京都駅前耳鼻咽喉科アレルギー科クリニック", "15", "", "", "", "85:00:00", "15:44", "", "", "0:45", "0:02", "", "1", "12", "8:00", ""], ["0001182", "小出 有紗", "いぐちクリニック", "18", "", "", "", "125:12:00", "29:40:00", "", "", "0:30", "0:40", "", "", "5", "", ""], ["0001187", "古川 央樹", "出町柳こどもクリニック", "2", "", "", "", "6:57", "", "", "", "0:27", "", "", "", "", "", ""], ["0001189", "伊藤 英介", "出町柳こどもクリニック", "", "", "", "", "", "", "", "", "", "", "", "", "", "", ""], ["0001190", "森岡 依子", "出町柳こどもクリニック", "1", "", "", "", "3:37", "", "", "", "0:22", "", "", "", "", "", ""], ["0001191", "山本 正仁", "出町柳こどもクリニック", "2", "", "", "", "6:59", "", "", "", "0:29", "", "", "", "", "", ""], ["0001192", "山本 明代", "出町柳こどもクリニック", "4", "", "", "", "14:47", "", "", "", "0:47", "", "", "", "", "", ""], ["0001193", "矢野 文季子", "京都駅前耳鼻咽喉科アレルギー科クリニック", "18", "", "", "", "124:09:00", "15:04", "", "", "8:13", "4:45", "", "0.5", "6", "3:30", ""], ["0001194", "松枝 知美", "京都駅前耳鼻咽喉科アレルギー科クリニック", "10", "", "", "", "63:18:00", "6:43", "", "", "1:12", "2:02", "", "", "4", "", "28:36:00"], ["0001195", "大門 寿美代", "出町柳こどもクリニック", "6", "", "", "", "24:44:00", "1:30", "", "", "0:44", "", "", "", "", "", ""], ["0001199", "丸岡 詩織", "出町柳こどもクリニック", "8", "", "", "", "40:45:00", "3:35", "", "", "1:18", "", "", "", "", "", ""], ["0001202", "小村 綾子", "いぐちクリニック", "7", "", "", "", "32:46:00", "9:40", "", "", "", "", "", "", "", "", ""], ["0001205", "加藤 日菜子", "京都駅前耳鼻咽喉科アレルギー科クリニック", "9", "", "", "", "55:34:00", "6:42", "", "", "2:05", "0:40", "", "10", "", "51:00:00", "17:58"], ["0001209", "鈴木 直子", "烏丸今出川みずたに呼吸器内科・外科クリニック", "19", "", "", "", "139:31:00", "20:03", "", "", "3:27", "3:56", "", "", "10", "", ""], ["0001211", "井上 圭", "烏丸今出川みずたに呼吸器内科・外科クリニック", "19", "", "", "", "128:43:00", "17:23", "", "", "2:25", "1:19", "", "", "10", "", ""], ["0001217", "久保野 鞠子", "いぐちクリニック", "19", "", "", "", "83:29:00", "2:43", "", "", "2:04", "", "", "", "", "", ""], ["0001218", "杉本 京子", "京都駅前耳鼻咽喉科アレルギー科クリニック", "7", "", "", "1", "29:00:00", "", "", "2:11", "1:00", "", "", "", "", "", ""], ["0001219", "永井 咲羽", "京都駅前耳鼻咽喉科アレルギー科クリニック", "4", "", "", "", "17:39", "", "", "", "0:16", "", "", "", "", "", "4:06"], ["0001220", "北尾 茉衣", "京都駅前耳鼻咽喉科アレルギー科クリニック", "17", "", "", "", "99:00:00", "5:38", "", "", "5:48", "", "", "", "", "", "17:36"], ["0001221", "藤田 正子", "烏丸今出川みずたに呼吸器内科・外科クリニック", "13", "", "", "", "64:35:00", "", "", "", "1:29", "", "", "", "", "", ""], ["0001222", "岐美 裕子", "烏丸今出川みずたに呼吸器内科・外科クリニック", "10", "", "", "", "53:41:00", "", "", "", "0:31", "", "", "", "", "", ""], ["0001223", "舟見 恵子", "いぐちクリニック", "14", "", "", "", "79:47:00", "17:55", "", "", "0:10", "0:26", "", "", "", "", ""], ["0001224", "北口 彩奈", "京都駅前耳鼻咽喉科アレルギー科クリニック", "12", "", "1", "", "59:54:00", "", "1:00", "", "4:36", "", "", "", "", "", ""], ["0001225", "仲川 真希", "京都駅前耳鼻咽喉科アレルギー科クリニック", "1", "", "", "", "5:19", "", "", "", "0:19", "", "", "", "", "", "3:04"], ["0001227", "小田 なつみ", "京都駅前耳鼻咽喉科アレルギー科クリニック", "17", "", "1", "", "103:22:00", "3:35", "0:04", "", "3:21", "2:50", "", "", "", "", "26:44:00"], ["0001228", "川江 清子", "いぐちクリニック", "20", "1", "", "", "123:19:00", "30:01:00", "", "", "2:23", "0:28", "", "", "", "", ""], ["0001229", "米澤 佳絵", "烏丸今出川みずたに呼吸器内科・外科クリニック", "12", "", "", "", "47:24:00", "", "", "", "2:27", "", "", "", "", "", ""], ["0001231", "大江 健吾", "京都駅前耳鼻咽喉科アレルギー科クリニック", "1", "", "", "", "3:30", "", "", "", "", "", "", "", "", "", ""]], "2026-01": [["0001002", "大滝 雅子", "京都駅前耳鼻咽喉科アレルギー科クリニック", "14", "", "4", "", "84:17:00", "", "0:18", "", "3:09", "", "", "", "15", "", "17:40"], ["0001004", "小島 憲", "いぐちクリニック", "10", "", "", "", "31:49:00", "", "", "", "", "", "", "", "", "", ""], ["0001012", "山地 かえ子", "いぐちクリニック", "13", "", "", "", "51:36:00", "", "", "", "2:37", "", "", "0.5", "29.5", "3:30", ""], ["0001015", "高野 篤子", "いぐちクリニック", "18", "", "", "", "136:39:00", "15:15", "", "", "131:29:00", "4:21", "", "1", "30.5", "7:00", ""], ["0001020", "水鳥 和美", "いぐちクリニック", "17", "", "", "", "64:49:00", "", "", "", "1:58", "", "", "1", "40", "3:30", ""], ["0001021", "宮城 喜代子", "いぐちクリニック", "18", "", "", "", "126:19:00", "31:57:00", "", "", "3:39", "1:03", "", "", "32.5", "", ""], ["0001029", "加藤 輝美", "いぐちクリニック", "13", "", "", "", "84:52:00", "22:52", "", "", "1:59", "0:45", "", "5", "", "37:30:00", ""], ["0001031", "伊藤 壽一", "いぐちクリニック", "8", "", "", "", "38:13:00", "9:04", "", "", "0:25", "", "", "", "", "", ""], ["0001036", "中川 茉耶", "京都駅前耳鼻咽喉科アレルギー科クリニック", "15", "", "", "", "116:29:00", "12:00", "", "", "116:29:00", "6:50", "", "2", "34.5", "15:00", ""], ["0001041", "芳賀 ゆき", "いぐちクリニック", "15", "", "1", "", "66:53:00", "2:17", "0:07", "", "2:50", "0:08", "", "1", "21", "3:30", "7:21"], ["0001075", "吉田 美帆", "京都駅前耳鼻咽喉科アレルギー科クリニック", "15", "", "", "", "119:57:00", "11:25", "", "", "17:19", "13:43", "", "2", "17.5", "15:00", ""], ["0001123", "竹内 万理恵", "いぐちクリニック", "4", "", "", "", "14:17", "", "", "", "0:32", "", "", "", "", "", ""], ["0001124", "森 亜弓", "いぐちクリニック", "14", "", "3", "", "54:59:00", "", "0:05", "", "2:10", "", "", "", "17", "", ""], ["0001125", "藤田 琴恵", "京都駅前耳鼻咽喉科アレルギー科クリニック", "", "", "", "", "", "", "", "", "", "", "", "", "", "", ""], ["0001127", "藤井 あおい", "烏丸今出川みずたに呼吸器内科・外科クリニック", "19", "", "", "", "135:03:00", "19:49", "", "", "8:25", "4:38", "", "", "13", "", ""], ["0001133", "小形 知恵子", "いぐちクリニック", "19", "", "", "", "129:08:00", "31:50:00", "", "", "4:14", "1:43", "", "", "15", "", ""], ["0001134", "小池 陽子", "京都駅前耳鼻咽喉科アレルギー科クリニック", "", "", "", "", "", "", "", "", "", "", "", "", "18.5", "", ""], ["0001142", "藤井 ひな乃", "京都駅前耳鼻咽喉科アレルギー科クリニック", "16", "", "", "", "124:27:00", "12:06", "", "", "12:03", "10:16", "", "2", "12", "15:00", ""], ["0001150", "山本 さゆり", "京都駅前耳鼻咽喉科アレルギー科クリニック", "4", "", "1", "", "13:27", "", "0:15", "", "", "", "", "", "", "", ""], ["0001153", "黒瀬 貴子", "出町柳こどもクリニック", "13", "", "", "", "50:44:00", "", "", "", "5:21", "", "", "", "3", "", ""], ["0001154", "古元 有樹", "出町柳こどもクリニック", "15", "", "", "", "76:21:00", "4:38", "", "", "3:08", "", "", "1", "7", "7:30", ""], ["0001157", "伊藤 有美", "出町柳こどもクリニック", "17", "", "", "", "109:02:00", "15:19", "", "", "4:18", "0:29", "", "0.5", "4", "3:30", ""], ["0001159", "竹綱 知晴", "出町柳こどもクリニック", "18", "", "", "", "123:12:00", "19:22", "", "", "5:11", "0:55", "", "", "8.5", "", ""], ["0001164", "松原 由歩", "京都駅前耳鼻咽喉科アレルギー科クリニック", "13", "", "", "", "43:47:00", "", "", "", "0:20", "", "", "", "", "", ""], ["0001165", "菅 早知子", "京都駅前耳鼻咽喉科アレルギー科クリニック", "8", "", "", "", "29:05:00", "1:10", "", "", "3:34", "", "", "", "", "", ""], ["0001167", "勝本 暢子", "京都駅前耳鼻咽喉科アレルギー科クリニック", "19", "", "", "", "146:21:00", "12:12", "", "", "18:46", "9:19", "", "", "10.5", "", ""], ["0001169", "橋口 弘美", "京都駅前耳鼻咽喉科アレルギー科クリニック", "11", "", "", "", "53:55:00", "0:51", "", "", "7:56", "", "", "", "11", "", "3:38"], ["0001174", "西條 美和", "烏丸今出川みずたに呼吸器内科・外科クリニック", "17", "", "", "", "131:38:00", "22:38", "", "", "9:45", "4:18", "", "", "7", "", ""], ["0001181", "西本 仁", "京都駅前耳鼻咽喉科アレルギー科クリニック", "14", "", "", "", "81:42:00", "16:05", "", "", "1:04", "", "", "1", "15", "7:30", ""], ["0001182", "小出 有紗", "いぐちクリニック", "18", "", "", "", "123:02:00", "32:18:00", "", "", "4:01", "2:19", "", "", "9", "", ""], ["0001184", "三好 毅", "いぐちクリニック", "7", "", "", "", "24:08:00", "", "", "", "0:12", "", "", "", "", "", ""], ["0001187", "古川 央樹", "出町柳こどもクリニック", "", "", "", "", "", "", "", "", "", "", "", "", "", "", ""], ["0001189", "伊藤 英介", "出町柳こどもクリニック", "2", "", "", "", "7:22", "", "", "", "0:52", "", "", "", "", "", ""], ["0001190", "森岡 依子", "出町柳こどもクリニック", "2", "", "", "", "7:17", "", "", "", "0:47", "", "", "", "", "", ""], ["0001191", "山本 正仁", "出町柳こどもクリニック", "1", "", "", "", "3:53", "", "", "", "0:38", "", "", "", "", "", ""], ["0001192", "山本 明代", "出町柳こどもクリニック", "3", "", "", "", "12:26", "", "", "", "1:56", "", "", "", "", "", ""], ["0001193", "矢野 文季子", "京都駅前耳鼻咽喉科アレルギー科クリニック", "17", "", "", "", "138:28:00", "10:47", "", "", "18:09", "16:22", "", "1", "6.5", "7:30", ""], ["0001194", "松枝 知美", "京都駅前耳鼻咽喉科アレルギー科クリニック", "9", "", "", "", "72:25:00", "7:18", "", "", "13:58", "5:15", "", "", "4", "", "30:53:00"], ["0001195", "大門 寿美代", "出町柳こどもクリニック", "5", "", "", "", "23:01", "1:41", "", "", "0:12", "", "", "", "", "", ""], ["0001199", "丸岡 詩織", "出町柳こどもクリニック", "8", "", "", "", "38:30:00", "2:38", "", "", "1:38", "", "", "", "", "", ""], ["0001202", "小村 綾子", "いぐちクリニック", "7", "", "", "", "36:52:00", "12:23", "", "", "0:06", "", "", "", "", "", ""], ["0001203", "馬塲 美樹", "出町柳こどもクリニック", "12", "", "", "", "77:08:00", "13:35", "", "", "0:50", "0:13", "", "", "5", "", ""], ["0001205", "加藤 日菜子", "京都駅前耳鼻咽喉科アレルギー科クリニック", "20", "1", "", "", "132:03:00", "20:36", "", "", "13:04", "5:38", "", "", "10", "", "41:18:00"], ["0001208", "金光 華甫", "烏丸今出川みずたに呼吸器内科・外科クリニック", "19", "", "", "", "143:08:00", "20:14", "", "", "8:56", "8:07", "", "0.5", "9.5", "5:15", ""], ["0001209", "鈴木 直子", "烏丸今出川みずたに呼吸器内科・外科クリニック", "17", "", "", "", "132:31:00", "18:35", "", "", "6:16", "9:29", "", "", "", "", ""], ["0001211", "井上 圭", "烏丸今出川みずたに呼吸器内科・外科クリニック", "19", "", "", "", "124:20:00", "14:40", "", "", "4:09", "1:04", "", "", "", "", ""], ["0001216", "新田 晶美", "京都駅前耳鼻咽喉科アレルギー科クリニック", "7", "", "", "", "29:47:00", "", "", "", "1:51", "", "", "", "", "", ""], ["0001217", "久保野 鞠子", "いぐちクリニック", "17", "", "", "", "72:46:00", "", "", "", "6:12", "", "", "", "", "", ""], ["0001218", "杉本 京子", "京都駅前耳鼻咽喉科アレルギー科クリニック", "6", "1", "", "", "26:16:00", "", "", "", "2:16", "", "", "", "", "", ""], ["0001219", "永井 咲羽", "京都駅前耳鼻咽喉科アレルギー科クリニック", "6", "", "", "", "26:17:00", "", "", "", "0:44", "", "", "", "", "", "8:19"], ["0001220", "北尾 茉衣", "京都駅前耳鼻咽喉科アレルギー科クリニック", "7", "", "", "", "35:45:00", "0:55", "", "", "2:13", "", "", "", "", "", "1:57"], ["0001224", "北口 彩奈", "京都駅前耳鼻咽喉科アレルギー科クリニック", "2", "", "", "", "10:25", "", "", "", "0:25", "", "", "", "", "", ""]]};
+const MONTH_KEYS=Object.keys(MONTHLY_DATA).sort().reverse();
+let curMonth=MONTH_KEYS[0];
+let MONTHLY_ROWS=MONTHLY_DATA[curMonth];
+function setMonth(m){curMonth=m;MONTHLY_ROWS=MONTHLY_DATA[m]||[];renderAdmin();}
+// 時間帯（夜外来あり・金額は持たない）
+const WAGE_BANDS = {
+  ekimae:[{label:'通常',start:'09:00',end:'18:00'},{label:'夜外来',start:'18:00',end:'22:00'}],
+  iguchi:[{label:'通常',start:'09:00',end:'18:00'},{label:'夜外来',start:'18:00',end:'21:00'}],
+  demachi:[{label:'通常',start:'09:00',end:'18:00'},{label:'夜外来',start:'18:00',end:'21:00'}],
+  karasuma:[{label:'通常',start:'09:00',end:'18:00'},{label:'夜外来',start:'18:00',end:'21:00'}],
+};
+const today = new Date().toISOString().slice(0,10);
+function hm(s){return s} // helper passthrough
+
+// スタッフ（勤務開始日・希望就業時間・本日のシフト/実打刻つき）
+let STAFF = [{"id": "0001002", "name": "大滝 雅子", "loc": "ekimae", "slot": "夜外来", "shift": {"s": "13:00", "e": "22:00"}, "rec": {"in": "08:58", "out": null}}, {"id": "0001004", "name": "小島 憲", "loc": "iguchi", "slot": "午前外来", "shift": {"s": "09:00", "e": "18:00"}, "rec": {"in": "09:05", "out": null}}, {"id": "0001012", "name": "山地 かえ子", "loc": "iguchi", "slot": "午前外来", "shift": {"s": "09:00", "e": "18:00"}, "rec": {"in": "08:50", "out": "18:10"}}, {"id": "0001015", "name": "高野 篤子", "loc": "iguchi", "slot": "午前外来", "shift": {"s": "09:00", "e": "18:00"}, "rec": {"in": null, "out": null}}, {"id": "0001020", "name": "水鳥 和美", "loc": "iguchi", "slot": "午前外来", "shift": {"s": "09:00", "e": "18:00"}, "rec": {"in": "08:58", "out": null}}, {"id": "0001021", "name": "宮城 喜代子", "loc": "iguchi", "slot": "午前外来", "shift": {"s": "09:00", "e": "18:00"}, "rec": {"in": "09:05", "out": null}}, {"id": "0001031", "name": "伊藤 壽一", "loc": "iguchi", "slot": "午前外来", "shift": {"s": "09:00", "e": "18:00"}, "rec": {"in": "08:50", "out": "18:10"}}, {"id": "0001036", "name": "中川 茉耶", "loc": "ekimae", "slot": "午前外来", "shift": {"s": "09:00", "e": "18:00"}, "rec": {"in": null, "out": null}}, {"id": "0001041", "name": "芳賀 ゆき", "loc": "iguchi", "slot": "夜外来", "shift": {"s": "13:00", "e": "22:00"}, "rec": {"in": "08:58", "out": null}}, {"id": "0001075", "name": "吉田 美帆", "loc": "ekimae", "slot": "午前外来", "shift": {"s": "09:00", "e": "18:00"}, "rec": {"in": "09:05", "out": null}}, {"id": "0001123", "name": "竹内 万理恵", "loc": "iguchi", "slot": "午前外来", "shift": {"s": "09:00", "e": "18:00"}, "rec": {"in": "08:50", "out": "18:10"}}, {"id": "0001124", "name": "森 亜弓", "loc": "iguchi", "slot": "午前外来", "shift": {"s": "09:00", "e": "18:00"}, "rec": {"in": null, "out": null}}, {"id": "0001125", "name": "藤田 琴恵", "loc": "ekimae", "slot": "午前外来", "shift": {"s": "09:00", "e": "18:00"}, "rec": {"in": "08:58", "out": null}}, {"id": "0001127", "name": "藤井 あおい", "loc": "iguchi", "slot": "午前外来", "shift": {"s": "09:00", "e": "18:00"}, "rec": {"in": "09:05", "out": null}}, {"id": "0001133", "name": "小形 知恵子", "loc": "iguchi", "slot": "午前外来", "shift": {"s": "09:00", "e": "18:00"}, "rec": {"in": "08:50", "out": "18:10"}}, {"id": "0001134", "name": "小池 陽子", "loc": "ekimae", "slot": "午前外来", "shift": {"s": "09:00", "e": "18:00"}, "rec": {"in": null, "out": null}}, {"id": "0001142", "name": "藤井 ひな乃", "loc": "ekimae", "slot": "午前外来", "shift": {"s": "09:00", "e": "18:00"}, "rec": {"in": "08:58", "out": null}}, {"id": "0001150", "name": "山本 さゆり", "loc": "ekimae", "slot": "午前外来", "shift": {"s": "09:00", "e": "18:00"}, "rec": {"in": "09:05", "out": null}}, {"id": "0001157", "name": "伊藤 有美", "loc": "demachi", "slot": "午前外来", "shift": {"s": "09:00", "e": "18:00"}, "rec": {"in": "08:50", "out": "18:10"}}, {"id": "0001164", "name": "松原 由歩", "loc": "ekimae", "slot": "午前外来", "shift": {"s": "09:00", "e": "18:00"}, "rec": {"in": null, "out": null}}, {"id": "0001165", "name": "菅 早知子", "loc": "ekimae", "slot": "午前外来", "shift": {"s": "09:00", "e": "18:00"}, "rec": {"in": "08:58", "out": null}}, {"id": "0001167", "name": "勝本 暢子", "loc": "ekimae", "slot": "午前外来", "shift": {"s": "09:00", "e": "18:00"}, "rec": {"in": "09:05", "out": null}}, {"id": "0001169", "name": "橋口 弘美", "loc": "ekimae", "slot": "午前外来", "shift": {"s": "09:00", "e": "18:00"}, "rec": {"in": "08:50", "out": "18:10"}}, {"id": "0001174", "name": "西條 美和", "loc": "karasuma", "slot": "午前外来", "shift": {"s": "09:00", "e": "18:00"}, "rec": {"in": null, "out": null}}, {"id": "0001181", "name": "西本 仁", "loc": "ekimae", "slot": "午前外来", "shift": {"s": "09:00", "e": "18:00"}, "rec": {"in": "08:58", "out": null}}, {"id": "0001182", "name": "小出 有紗", "loc": "iguchi", "slot": "午前外来", "shift": {"s": "09:00", "e": "18:00"}, "rec": {"in": "09:05", "out": null}}, {"id": "0001187", "name": "古川 央樹", "loc": "demachi", "slot": "午前外来", "shift": {"s": "09:00", "e": "18:00"}, "rec": {"in": "08:50", "out": "18:10"}}, {"id": "0001189", "name": "伊藤 英介", "loc": "demachi", "slot": "午前外来", "shift": {"s": "09:00", "e": "18:00"}, "rec": {"in": null, "out": null}}, {"id": "0001190", "name": "森岡 依子", "loc": "demachi", "slot": "午前外来", "shift": {"s": "09:00", "e": "18:00"}, "rec": {"in": "08:58", "out": null}}, {"id": "0001191", "name": "山本 正仁", "loc": "demachi", "slot": "午前外来", "shift": {"s": "09:00", "e": "18:00"}, "rec": {"in": "09:05", "out": null}}, {"id": "0001192", "name": "山本 明代", "loc": "demachi", "slot": "午前外来", "shift": {"s": "09:00", "e": "18:00"}, "rec": {"in": "08:50", "out": "18:10"}}, {"id": "0001193", "name": "矢野 文季子", "loc": "ekimae", "slot": "午前外来", "shift": {"s": "09:00", "e": "18:00"}, "rec": {"in": null, "out": null}}, {"id": "0001194", "name": "松枝 知美", "loc": "ekimae", "slot": "夜外来", "shift": {"s": "13:00", "e": "22:00"}, "rec": {"in": "08:58", "out": null}}, {"id": "0001195", "name": "大門 寿美代", "loc": "demachi", "slot": "午前外来", "shift": {"s": "09:00", "e": "18:00"}, "rec": {"in": "09:05", "out": null}}, {"id": "0001199", "name": "丸岡 詩織", "loc": "demachi", "slot": "午前外来", "shift": {"s": "09:00", "e": "18:00"}, "rec": {"in": "08:50", "out": "18:10"}}, {"id": "0001202", "name": "小村 綾子", "loc": "iguchi", "slot": "午前外来", "shift": {"s": "09:00", "e": "18:00"}, "rec": {"in": null, "out": null}}, {"id": "0001205", "name": "加藤 日菜子", "loc": "ekimae", "slot": "夜外来", "shift": {"s": "13:00", "e": "22:00"}, "rec": {"in": "08:58", "out": null}}, {"id": "0001209", "name": "鈴木 直子", "loc": "karasuma", "slot": "午前外来", "shift": {"s": "09:00", "e": "18:00"}, "rec": {"in": "09:05", "out": null}}, {"id": "0001211", "name": "井上 圭", "loc": "karasuma", "slot": "午前外来", "shift": {"s": "09:00", "e": "18:00"}, "rec": {"in": "08:50", "out": "18:10"}}, {"id": "0001217", "name": "久保野 鞠子", "loc": "iguchi", "slot": "午前外来", "shift": {"s": "09:00", "e": "18:00"}, "rec": {"in": null, "out": null}}, {"id": "0001218", "name": "杉本 京子", "loc": "ekimae", "slot": "午前外来", "shift": {"s": "09:00", "e": "18:00"}, "rec": {"in": "08:58", "out": null}}, {"id": "0001219", "name": "永井 咲羽", "loc": "ekimae", "slot": "夜外来", "shift": {"s": "13:00", "e": "22:00"}, "rec": {"in": "09:05", "out": null}}, {"id": "0001220", "name": "北尾 茉衣", "loc": "ekimae", "slot": "夜外来", "shift": {"s": "13:00", "e": "22:00"}, "rec": {"in": "08:50", "out": "18:10"}}, {"id": "0001221", "name": "藤田 正子", "loc": "karasuma", "slot": "午前外来", "shift": {"s": "09:00", "e": "18:00"}, "rec": {"in": null, "out": null}}, {"id": "0001222", "name": "岐美 裕子", "loc": "karasuma", "slot": "午前外来", "shift": {"s": "09:00", "e": "18:00"}, "rec": {"in": "08:58", "out": null}}, {"id": "0001223", "name": "舟見 恵子", "loc": "iguchi", "slot": "午前外来", "shift": {"s": "09:00", "e": "18:00"}, "rec": {"in": "09:05", "out": null}}, {"id": "0001224", "name": "北口 彩奈", "loc": "ekimae", "slot": "午前外来", "shift": {"s": "09:00", "e": "18:00"}, "rec": {"in": "08:50", "out": "18:10"}}, {"id": "0001225", "name": "仲川 真希", "loc": "ekimae", "slot": "夜外来", "shift": {"s": "13:00", "e": "22:00"}, "rec": {"in": null, "out": null}}, {"id": "0001227", "name": "小田 なつみ", "loc": "ekimae", "slot": "夜外来", "shift": {"s": "13:00", "e": "22:00"}, "rec": {"in": "08:58", "out": null}}, {"id": "0001228", "name": "川江 清子", "loc": "iguchi", "slot": "午前外来", "shift": {"s": "09:00", "e": "18:00"}, "rec": {"in": "09:05", "out": null}}, {"id": "0001229", "name": "米澤 佳絵", "loc": "karasuma", "slot": "午前外来", "shift": {"s": "09:00", "e": "18:00"}, "rec": {"in": "08:50", "out": "18:10"}}, {"id": "0001231", "name": "大江 健吾", "loc": "ekimae", "slot": "午前外来", "shift": {"s": "09:00", "e": "18:00"}, "rec": {"in": null, "out": null}}];
+
+// 申請（有給・残業・修正）
+let REQUESTS = [
+  {id:101, staff:'0001002', type:'leave',     date:'2026-06-20', detail:'全休（私用）', status:'pending'},
+  {id:102, staff:'0001015', type:'overtime',  date:today,        detail:'院長依頼で残業1.5h', status:'pending'},
+  {id:103, staff:'0001036', type:'correction',date:today,        detail:'打刻忘れ→出勤9:00に修正希望', status:'pending'},
+];
+
+// 有給残（簡易）
+const LEAVE = {"0001002": {"grant": 15.0, "used": 2.0}, "0001004": {"grant": 0, "used": 0}, "0001012": {"grant": 28.5, "used": 0}, "0001015": {"grant": 29.5, "used": 1.0}, "0001020": {"grant": 37.0, "used": 0}, "0001021": {"grant": 28.5, "used": 0}, "0001031": {"grant": 0, "used": 0}, "0001036": {"grant": 30.5, "used": 1.0}, "0001041": {"grant": 16.0, "used": 1.0}, "0001075": {"grant": 13.0, "used": 0.5}, "0001123": {"grant": 0, "used": 0}, "0001124": {"grant": 17.0, "used": 0}, "0001125": {"grant": 0, "used": 0}, "0001127": {"grant": 8.0, "used": 0}, "0001133": {"grant": 14.0, "used": 0}, "0001134": {"grant": 18.5, "used": 0}, "0001142": {"grant": 10.5, "used": 1.0}, "0001150": {"grant": 0, "used": 0}, "0001157": {"grant": 15.0, "used": 0.5}, "0001164": {"grant": 0, "used": 0}, "0001165": {"grant": 0, "used": 0}, "0001167": {"grant": 8.5, "used": 0}, "0001169": {"grant": 9.0, "used": 1.0}, "0001174": {"grant": 5.0, "used": 0}, "0001181": {"grant": 13.0, "used": 1.0}, "0001182": {"grant": 5.0, "used": 0}, "0001187": {"grant": 0, "used": 0}, "0001189": {"grant": 0, "used": 0}, "0001190": {"grant": 0, "used": 0}, "0001191": {"grant": 0, "used": 0}, "0001192": {"grant": 0, "used": 0}, "0001193": {"grant": 6.5, "used": 0.5}, "0001194": {"grant": 4.0, "used": 0}, "0001195": {"grant": 0, "used": 0}, "0001199": {"grant": 0, "used": 0}, "0001202": {"grant": 0, "used": 0}, "0001205": {"grant": 10.0, "used": 10.0}, "0001209": {"grant": 10.0, "used": 0}, "0001211": {"grant": 10.0, "used": 0}, "0001217": {"grant": 0, "used": 0}, "0001218": {"grant": 0, "used": 0}, "0001219": {"grant": 0, "used": 0}, "0001220": {"grant": 0, "used": 0}, "0001221": {"grant": 0, "used": 0}, "0001222": {"grant": 0, "used": 0}, "0001223": {"grant": 0, "used": 0}, "0001224": {"grant": 0, "used": 0}, "0001225": {"grant": 0, "used": 0}, "0001227": {"grant": 0, "used": 0}, "0001228": {"grant": 0, "used": 0}, "0001229": {"grant": 0, "used": 0}, "0001231": {"grant": 0, "used": 0}};
+
+let curRole='ipad', curLoc='ekimae', curStaff=STAFF[0].id;
+let csvSource='calc'; // CSVタブの表示ソース: 'calc'=打刻集計(当月) / 'upload'=アップロード実績
+const TOL=5; // 許容±5分
+
+/* ===== アイコンの個人カスタマイズ ===== */
+const PALETTE=['#2563eb','#16a34a','#dc2626','#d97706','#7c3aed','#db2777','#0891b2','#475569','#ca8a04','#15803d'];
+const ICON_CHOICES=['initial','🩺','💉','🦷','👩‍⚕️','👨‍⚕️','🏥','🌸','⭐','🐱','🐶','☕'];
+// 保存済み設定の読み込み
+let AVATAR_PREF={};
+try{AVATAR_PREF=JSON.parse(localStorage.getItem('tc_avatar')||'{}');}catch(e){AVATAR_PREF={};}
+function saveAvatarPref(){try{localStorage.setItem('tc_avatar',JSON.stringify(AVATAR_PREF));}catch(e){}}
+function hashId(x){x=String(x);let h=0;for(let i=0;i<x.length;i++)h=(h*31+x.charCodeAt(i))>>>0;return h;}
+function staffColor(s){return (AVATAR_PREF[s.id]&&AVATAR_PREF[s.id].color)||PALETTE[hashId(s.id)%PALETTE.length];}
+function staffShape(s){return (AVATAR_PREF[s.id]&&AVATAR_PREF[s.id].shape)||'circle';} // circle / sq
+function staffIcon(s){
+  const ic=AVATAR_PREF[s.id]&&AVATAR_PREF[s.id].icon;
+  return (!ic||ic==='initial')?initials(s.name):ic;
+}
+function avatarHTML(s,extra=''){
+  const shape=staffShape(s)==='sq'?' sq':'';
+  return `<div class="avatar${shape}${extra}" style="background:${staffColor(s)}">${staffIcon(s)}</div>`;
+}
+
+/* ===== 診療カレンダー（シフトアプリの診療枠ベース） =====
+   DAYSLOTS[日付] = [{id,label,s,e,type}]（その日に診療がある枠：取り込んだasgn＋slots由来）
+   CANCELLED[日付] = {slotId:true}（管理者がOPキャンセル等で休診にした枠） */
+let DAYSLOTS={};
+let CANCELLED={};
+function isCancelled(date,slotId){return !!(CANCELLED[date]&&CANCELLED[date][slotId]);}
+function toggleCancel(date,slotId){
+  CANCELLED[date]=CANCELLED[date]||{};
+  if(CANCELLED[date][slotId])delete CANCELLED[date][slotId]; else CANCELLED[date][slotId]=true;
+  saveState();renderCalMonth();renderCalDetail();
+}
+// 取り込んだ予定(SHIFTPLAN)から、日付ごとの診療枠リストを構築
+function buildDaySlots(){
+  DAYSLOTS={};
+  Object.keys(SHIFTPLAN).forEach(code=>{
+    Object.entries(SHIFTPLAN[code]).forEach(([date,sh])=>{
+      (sh.slots||[]).forEach(id=>{
+        DAYSLOTS[date]=DAYSLOTS[date]||{};
+        if(!DAYSLOTS[date][id]){const t=SLOTLIB[id]||{};DAYSLOTS[date][id]={id,label:t.label||id,s:t.s||'',e:t.e||'',type:t.type||''};}
+      });
+    });
+  });
+  Object.keys(DAYSLOTS).forEach(d=>{DAYSLOTS[d]=Object.values(DAYSLOTS[d]).sort((a,b)=>(a.s||'').localeCompare(b.s||''));});
+}
+// その日の休診枠ラベル一覧（カレンダー表示用）
+function closedCells(date){
+  return (DAYSLOTS[date]||[]).filter(sl=>isCancelled(date,sl.id)).map(sl=>({label:sl.label||sl.id}));
+}
+// その人がその日に出勤不要（担当している診療枠が全て休診）か
+function closureFor(s,date){
+  const plan=(SHIFTPLAN[s.id]||{})[date]; if(!plan||!plan.slots||!plan.slots.length)return null;
+  const cancelled=plan.slots.filter(id=>isCancelled(date,id));
+  if(cancelled.length===plan.slots.length){
+    const labels=cancelled.map(id=>(SLOTLIB[id]&&SLOTLIB[id].label)||id);
+    return {type:'休診', note:labels.join('・')+' 休診'};
+  }
+  return null;
+}
+
+/* ===== スタッフ属性の上書き（勤務開始日・希望就業） ===== */
+let STAFF_META={};
+let HIDDEN={}; // code -> true なら打刻画面（トップページ）に表示しない（退職・休職など）
+function applyMeta(){STAFF.forEach(s=>{const m=STAFF_META[s.id];if(m){if(m.hire)s.hire=m.hire;if(m.desired!=null)s.desired=m.desired;}});}
+function isHidden(id){return !!HIDDEN[id];}
+function setHidden(id,hidden){if(hidden)HIDDEN[id]=true;else delete HIDDEN[id];saveState();renderIpad();renderAdmin();}
+
+/* ===== 割増（夜診察）時間帯。金額は持たず、対象時間帯のみ ===== */
+// NIGHT_BAND={s,e} が割増対象の時間帯。管理者が「診察時間の設定」で変更。
+let SLOTLIB={}; // 取り込んだ診療枠 {slotId:{label,time,type}}（参考表示用）
+let REQ_DATA={}; // requests_data.data 生データ（unit毎 {requests,avatars,timecardCorrections}）
+
+/* ===== 申請・打刻データの保存（リロードしても残す） ===== */
+function saveState(){
+  try{
+    const recs={};STAFF.forEach(s=>{if(s.rec)recs[s.id]=s.rec;});
+    localStorage.setItem('tc_state',JSON.stringify({requests:REQUESTS,recs,dayslots:DAYSLOTS,cancelled:CANCELLED,meta:STAFF_META,hidden:HIDDEN,punchlog:PUNCHLOG,shiftplan:SHIFTPLAN,leaveplan:LEAVEPLAN,nightBand:NIGHT_BAND,slotlib:SLOTLIB,demoMonth:DEMO_MONTH,importInfo:IMPORT_INFO,staffPin:STAFF_PIN,codeName:CODE_NAME,paid:PAID,editLog:EDIT_LOG,reqData:REQ_DATA}));
+  }catch(e){}
+}
+function loadState(){
+  try{
+    const raw=localStorage.getItem('tc_state');if(!raw)return;
+    const st=JSON.parse(raw);
+    if(Array.isArray(st.requests))REQUESTS=st.requests;
+    if(st.recs)STAFF.forEach(s=>{if(st.recs[s.id])s.rec=st.recs[s.id];});
+    if(st.dayslots)DAYSLOTS=st.dayslots;
+    if(st.cancelled)CANCELLED=st.cancelled;
+    if(st.meta)STAFF_META=st.meta;
+    if(st.hidden)HIDDEN=st.hidden;
+    if(st.slotlib)SLOTLIB=st.slotlib;
+    if(st.punchlog)PUNCHLOG=st.punchlog;
+    if(st.shiftplan)SHIFTPLAN=st.shiftplan;
+    if(st.leaveplan)LEAVEPLAN=st.leaveplan;
+    if(st.nightBand)NIGHT_BAND=st.nightBand;
+    if(st.demoMonth)DEMO_MONTH=st.demoMonth;
+    if(st.importInfo)IMPORT_INFO=st.importInfo;
+    if(st.staffPin)STAFF_PIN=st.staffPin;
+    if(st.codeName)CODE_NAME=st.codeName;
+    if(st.paid)PAID=st.paid;
+    if(Array.isArray(st.editLog))EDIT_LOG=st.editLog;
+    if(st.reqData)REQ_DATA=st.reqData;
+    applyMeta();
+    if(IMPORT_INFO){purgeOtherMonths();saveState();} // 取込済みなら旧デモ打刻を掃除して保存
+  }catch(e){}
+}
+
+/* ============ ユーティリティ ============ */
+const $=s=>document.querySelector(s);
+const $$=s=>[...document.querySelectorAll(s)];
+function toMin(t){if(!t)return null;const[a,b]=t.split(':').map(Number);return a*60+b;}
+function toHM(m){if(m==null)return'—';const h=Math.floor(m/60),mm=m%60;return `${h}:${String(mm).padStart(2,'0')}`;}
+function dur(rec){if(!rec||!rec.in||!rec.out)return null;return toMin(rec.out)-toMin(rec.in);}
+function initials(name){return name.replace(/\s/g,'').slice(0,1);}
+function locStaff(){return STAFF.filter(s=>s.loc===curLoc);}
+function toast(msg){const t=$('#toast');t.textContent=msg;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),2200);}
+
+// 法定休憩控除（6h超で45分,8h超で60分）
+function autoBreak(gross){if(gross==null)return 0;return gross>480?60:gross>360?45:0;}
+function netWork(rec){let d=dur(rec);if(d==null)return null;return d-autoBreak(d);}
+
+// 夜診察の時間帯（WAGE_BANDS の '夜外来'）に入った労働分
+function nightBandMin(s){
+  const nb=NIGHT_BAND||(WAGE_BANDS[s.loc]||[]).find(b=>b.label==='夜外来');
+  if(!nb||!s.rec||!s.rec.in||!s.rec.out)return 0;
+  const bs=toMin(nb.s||nb.start),be=toMin(nb.e||nb.end);
+  const ci=toMin(s.rec.in),co=toMin(s.rec.out);
+  return Math.max(0,Math.min(co,be)-Math.max(ci,bs));
+}
+// 打刻から1日分を自動計算（税理士CSVの該当列に対応）
+function calcDaily(s){
+  if(!s.rec||!s.rec.in||!s.rec.out)return null;
+  const gross=toMin(s.rec.out)-toMin(s.rec.in);
+  const brk=autoBreak(gross);
+  const net=gross-brk;                 // 実労働時間 = 入退室 − 自動休憩
+  const ot=Math.max(0,net-480);        // 実残業時間 = 法定8時間超
+  const night=nightBandMin(s);         // 夜診察勤務 = 夜時間帯の労働
+  return {gross,brk,net,ot,night,midnight:0}; // 実深夜時間 = 当院は常に0
+}
+
+/* ===== 打刻ログ（日別）と 1か月集計 → CSV ===== */
+// PUNCHLOG[staffId][YYYY-MM-DD] = {in,out}
+let PUNCHLOG={};
+function logPunch(s){PUNCHLOG[s.id]=PUNCHLOG[s.id]||{};PUNCHLOG[s.id][today]={in:s.rec.in,out:s.rec.out};}
+let DEMO_MONTH=today.slice(0,7); // 集計対象月（取込で上書きされる）
+function pad2(n){return String(n).padStart(2,'0');}
+function fmtDur(min){if(!min||min<=0)return '';return `${Math.floor(min/60)}:${pad2(min%60)}`;}
+function rnd(seed){const x=Math.sin(seed)*10000;return x-Math.floor(x);} // 疑似乱数(決定的)
+function normHM(t){const[a,b]=String(t).split(':');return `${pad2(Number(a))}:${pad2(Number(b||0))}`;}
+function hmOf(min){return `${pad2(Math.floor(min/60))}:${pad2(min%60)}`;}
+
+/* ===== シフト管理アプリ(クラウド/JSON)取り込み ===== */
+const SB_URL='https://hwctwbnzjjdllqsmlvqm.supabase.co';
+const SB_ANON='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imh3Y3R3Ym56ampkbGxxc21sdnFtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA4NzkzMDQsImV4cCI6MjA5NjQ1NTMwNH0.quP2UmR59c1ULUgZkqaq0kzeD8VlOY3cKH4ZaZJwtf0';
+let SHIFTPLAN={};   // code -> date -> {start,end,slots}
+let LEAVEPLAN={};   // code -> date -> 'off'|'paid'
+let NIGHT_BAND=null;// 取込slotから得た夜外来時間 {s,e}
+let IMPORT_INFO=null;
+let STAFF_PIN={};   // code -> PIN（シフトアプリ由来）。本人確認に使用
+let CODE_NAME={};   // code -> 氏名（給与名簿に無い取込コードの表示用）
+let PAID={};        // code -> {granted, taken:[{date,days}]}（シフトアプリの有給）
+let EDIT_LOG=[];    // 打刻修正の監査ログ {at,by,code,name,date,field,from,to}
+let staffAuthed=null; // 認証済みスタッフのcode（セッションのみ・保存しない）
+let ADMIN_PW=(function(){try{return localStorage.getItem('tc_adminpw')||'0000';}catch(e){return '0000';}})(); // 管理者パスワード（初期0000）
+let adminAuthed=false; // 管理者認証（セッションのみ・離脱で再ロック）
+// 有給ヘルパー（残＝付与−取得。全休=1日, 半休=0.5日）
+function unitDays(u){u=String(u||'full');return /half|am|pm|0\.5|半/.test(u)?0.5:1;}
+function paidGranted(code){return PAID[code]?Number(PAID[code].granted)||0:null;}
+function paidUsedTotal(code){const p=PAID[code];return p?p.taken.reduce((s,t)=>s+(t.days||0),0):0;}
+function paidUsedInMonth(code,ym){const p=PAID[code];return p?p.taken.filter(t=>(t.date||'').startsWith(ym)).reduce((s,t)=>s+(t.days||0),0):0;}
+function paidRemain(code){const g=paidGranted(code);return g==null?null:g-paidUsedTotal(code);}
+async function sbLogin(pw){
+  const r=await fetch(SB_URL+'/auth/v1/token?grant_type=password',
+    {method:'POST',headers:{apikey:SB_ANON,'Content-Type':'application/json'},
+     body:JSON.stringify({email:'shift-app@fukumimi.local',password:pw})});
+  const d=await r.json();
+  if(!r.ok||!d.access_token)throw new Error(d.error_description||'合言葉が違います');
+  return d.access_token;
+}
+async function sbFetchShift(token){
+  const r=await fetch(SB_URL+'/rest/v1/shift_data?id=eq.main&select=data',
+    {headers:{apikey:SB_ANON,Authorization:'Bearer '+token}});
+  const rows=await r.json();const all=(rows[0]&&rows[0].data)||{};
+  return {clerk:all.clerk||null,nurse:all.nurse||null,doctor:all.doctor||null};
+}
+async function cloudImport(pw){
+  const t=await sbLogin(pw);
+  const res=parseImport(await sbFetchShift(t));
+  try{ await fetchRequestsData(t); applyAvatarsFromReq(); saveAvatarPref(); saveState(); }catch(e){ console.warn('requests_data skip',e.message); }
+  return res;
+}
+/* ===== requests_data（アイコン avatars / 打刻修正 timecardCorrections） =====
+   data[unit] = { requests:{}, avatars:{code:{color,shape,icon}}, timecardCorrections:[...] } */
+async function fetchRequestsData(token){
+  const r=await fetch(SB_URL+'/rest/v1/requests_data?id=eq.main&select=data',
+    {headers:{apikey:SB_ANON,Authorization:'Bearer '+token}});
+  if(!r.ok)throw new Error('requests_data取得失敗('+r.status+')');
+  const rows=await r.json();
+  REQ_DATA=(rows[0]&&rows[0].data)||{};
+  return REQ_DATA;
+}
+async function pushRequestsData(token){
+  const r=await fetch(SB_URL+'/rest/v1/requests_data?on_conflict=id',
+    {method:'POST',headers:{apikey:SB_ANON,Authorization:'Bearer '+token,'Content-Type':'application/json',Prefer:'resolution=merge-duplicates,return=minimal'},
+     body:JSON.stringify({id:'main',data:REQ_DATA})});
+  if(!r.ok)throw new Error('requests_data保存失敗('+r.status+')');
+  return true;
+}
+function reqUnitWrap(unit){
+  const u=REQ_DATA[unit]; if(!u)return null;
+  if(u.requests||u.avatars||u.timecardCorrections)return u;
+  return {requests:u, avatars:{}, timecardCorrections:[]};
+}
+function applyAvatarsFromReq(){
+  ['clerk','nurse','doctor'].forEach(unit=>{const w=reqUnitWrap(unit);if(!w)return;
+    Object.entries(w.avatars||{}).forEach(([code,av])=>{if(av)AVATAR_PREF[code]=av;});});
+}
+function allCorrections(){
+  const out=[];
+  ['clerk','nurse','doctor'].forEach(unit=>{const w=reqUnitWrap(unit);if(!w)return;
+    (w.timecardCorrections||[]).forEach((c,idx)=>out.push(Object.assign({unit,idx},c)));});
+  return out;
+}
+
+/* ===== 本人データのクラウド保存／取得（timecard_data テーブル, 行 id='main'） =====
+   data = { staff: { <code>: {name,pin,punch,requests,avatar,updatedAt} }, updatedAt } */
+function buildCloudPayload(){
+  const staff={};
+  // 給与名簿＋取込コードの和集合（仮コードのスタッフも保存対象に含める）
+  const codes=new Set([...STAFF.map(s=>s.id), ...Object.keys(PUNCHLOG), ...Object.keys(SHIFTPLAN)]);
+  codes.forEach(code=>{
+    const st=STAFF.find(s=>s.id==code);
+    const punch=PUNCHLOG[code]||{};
+    const reqs=REQUESTS.filter(r=>r.staff==code);
+    const av=AVATAR_PREF[code]||null;
+    const pin=STAFF_PIN[code]||'';
+    const name=(st&&st.name)||CODE_NAME[code]||'';
+    if(Object.keys(punch).length||reqs.length||av||pin)
+      staff[code]={name,pin,punch,requests:reqs,avatar:av,updatedAt:new Date().toISOString()};
+  });
+  return {staff,updatedAt:new Date().toISOString()};
+}
+async function pushCloud(pw){
+  const t=await sbLogin(pw);
+  const r=await fetch(SB_URL+'/rest/v1/timecard_data?on_conflict=id',
+    {method:'POST',headers:{apikey:SB_ANON,Authorization:'Bearer '+t,'Content-Type':'application/json',Prefer:'resolution=merge-duplicates,return=minimal'},
+     body:JSON.stringify({id:'main',data:buildCloudPayload()})});
+  if(!r.ok)throw new Error('保存失敗（'+r.status+'）テーブル/権限をご確認ください');
+  return true;
+}
+async function pullCloudStaff(pw,code){
+  const t=await sbLogin(pw);
+  const r=await fetch(SB_URL+'/rest/v1/timecard_data?id=eq.main&select=data',
+    {headers:{apikey:SB_ANON,Authorization:'Bearer '+t}});
+  if(!r.ok)throw new Error('取得失敗（'+r.status+'）');
+  const rows=await r.json();const all=(rows[0]&&rows[0].data)||{};
+  return (all.staff||{})[code]||null;
+}
+// クラウドの本人レコードをローカルへ反映（その本人ぶんだけ）
+function applyCloudStaff(code,rec){
+  if(!rec)return;
+  if(rec.punch)PUNCHLOG[code]=rec.punch;
+  if(rec.pin)STAFF_PIN[code]=String(rec.pin);
+  if(rec.avatar){AVATAR_PREF[code]=rec.avatar;saveAvatarPref();}
+  if(Array.isArray(rec.requests)){REQUESTS=REQUESTS.filter(r=>r.staff!=code).concat(rec.requests);}
+}
+// 給与名簿との突合インデックス
+function rosterIndex(){
+  const byCode={},byFull={},bySur={};
+  STAFF.forEach(s=>{byCode[s.id]=s;byFull[(s.name||'').replace(/\s/g,'')]=s;
+    const sur=(s.name||'').split(' ')[0];(bySur[sur]=bySur[sur]||[]).push(s);});
+  return {byCode,byFull,bySur};
+}
+function resolveCode(st,idx){
+  if(st.code)return idx.byCode[st.code]?{code:st.code,ok:true}:{code:st.code,ok:false,reason:'給与名簿に未登録のコード'};
+  const full=(st.fullName||'').replace(/[\s（）]/g,'').replace('フル','');
+  if(full&&idx.byFull[full])return{code:idx.byFull[full].id,ok:true,byName:true};
+  const sur=(st.name||'').replace(/\s/g,'');
+  const c=idx.bySur[sur];
+  if(c&&c.length===1)return{code:c[0].id,ok:true,byName:true};
+  return{code:null,ok:false,reason:c&&c.length>1?'同姓が複数で特定不可':'該当なし（コード未付与）'};
+}
+function jobSlotTimes(job){
+  const m={};Object.values(job.slots||{}).forEach(arr=>(arr||[]).forEach(sl=>{
+    const p=(sl.time||'').split('-');if(p.length<2)return;
+    m[sl.id]={s:normHM(p[0]),e:normHM(p[1]),type:sl.type,label:sl.label};}));
+  return m;
+}
+function parseJob(job,jobName,idx,rep){
+  if(!job)return null;
+  const slotT=jobSlotTimes(job);
+  Object.assign(SLOTLIB,slotT); // 取り込んだ診療枠を参考表示用に保持
+  // 割増時間帯が未設定なら、夜外来コマの時間を初期値として採用（管理者が後で変更可）
+  if(!NIGHT_BAND)['pm2','pm_out'].forEach(k=>{if(slotT[k])NIGHT_BAND={s:slotT[k].s,e:slotT[k].e};});
+  const id2code={};
+  (job.staff||[]).forEach(st=>{const r=resolveCode(st,idx);id2code[st.id]=r.code;
+    if(r.code&&st.pin)STAFF_PIN[r.code]=String(st.pin);
+    if(r.code)CODE_NAME[r.code]=st.fullName||st.name||r.code;
+    if(r.code&&st.avatar&&typeof st.avatar==='object')AVATAR_PREF[r.code]=st.avatar; // 本人がスマホで設定したアイコンを反映
+    rep.push({job:jobName,name:st.name,code:st.code||'',resolved:r.code,ok:r.ok,reason:r.reason});});
+  Object.entries(job.asgn||{}).forEach(([date,slots])=>{
+    const per={};
+    Object.entries(slots||{}).forEach(([slotId,ids])=>(ids||[]).forEach(id=>{(per[id]=per[id]||[]).push(slotId);}));
+    Object.entries(per).forEach(([id,slist])=>{
+      const code=id2code[id];if(!code)return;
+      const starts=slist.map(x=>slotT[x]&&toMin(slotT[x].s)).filter(v=>v!=null);
+      const ends=slist.map(x=>slotT[x]&&toMin(slotT[x].e)).filter(v=>v!=null);
+      if(!starts.length)return;
+      let st=Math.min(...starts),en=Math.max(...ends);
+      if(slist.includes('am_surg')&&slist.includes('pm_surg'))en=toMin('15:30'); // 午前+午後手術の通しは15:30
+      SHIFTPLAN[code]=SHIFTPLAN[code]||{};
+      SHIFTPLAN[code][date]={start:hmOf(st),end:hmOf(en),slots:slist};
+    });
+  });
+  Object.entries(job.tmps||{}).forEach(([date,obj])=>Object.entries(obj||{}).forEach(([id,v])=>{
+    if(v&&(v.type==='off'||v.type==='paid')){const code=id2code[id];if(code){LEAVEPLAN[code]=LEAVEPLAN[code]||{};LEAVEPLAN[code][date]=v.type;}}
+  }));
+  Object.entries(job.paidLeave||{}).forEach(([id,v])=>{
+    const code=id2code[id];if(!code)return;
+    PAID[code]={granted:Number((v&&v.granted)||0), taken:[]};
+    ((v&&v.history)||[]).forEach(h=>{ if(h.dk){
+      PAID[code].taken.push({date:h.dk, days:unitDays(h.unit)});
+      LEAVEPLAN[code]=LEAVEPLAN[code]||{}; LEAVEPLAN[code][h.dk]='paid';
+    }});
+  });
+  return {y:job.y,m:job.m};
+}
+// 取込月(DEMO_MONTH)以外の打刻ログを削除（旧デモの残りを掃除）
+function purgeOtherMonths(){
+  const ym=DEMO_MONTH;
+  Object.keys(PUNCHLOG).forEach(code=>{
+    Object.keys(PUNCHLOG[code]).forEach(d=>{if(!d.startsWith(ym))delete PUNCHLOG[code][d];});
+  });
+}
+function parseImport(wrapped){
+  SHIFTPLAN={};LEAVEPLAN={};STAFF_PIN={};CODE_NAME={};PAID={};SLOTLIB={}; // NIGHT_BAND(割増時間帯)は管理者設定なので消さない
+  const idx=rosterIndex();const rep=[];let ym=null;
+  ['nurse','clerk','doctor'].forEach(jn=>{const job=wrapped[jn];if(!job)return;
+    const r=parseJob(job,jn,idx,rep);if(r&&r.y&&r.m)ym=`${r.y}-${pad2(r.m)}`;});
+  if(ym)DEMO_MONTH=ym;
+  buildDaySlots();      // 取り込んだ診療枠から日別の枠リストを構築
+  purgeOtherMonths();   // 取込月以外の旧デモ打刻を消す
+  seedPunchFromPlan();
+  IMPORT_INFO={at:new Date().toISOString(),month:ym,report:rep};
+  saveAvatarPref(); // 取り込んだアイコン設定を保存
+  saveState();
+  return {ym,rep};
+}
+// 取り込んだ予定からサンプル打刻を生成（シフト側と統一したルール）
+//  出勤＝予定開始 −8〜+4分 / 退勤＝予定終了 −5〜+10分
+//  休診・休み(off)・有給(paid)は打刻なし / コードごとに遅刻・早退を1日ずつ混ぜる
+//  通し手術の退勤15:30は SHIFTPLAN.end に反映済み
+function seedPunchFromPlan(){
+  const ym=DEMO_MONTH;
+  Object.keys(SHIFTPLAN).forEach(code=>{
+    PUNCHLOG[code]=PUNCHLOG[code]||{};
+    // 対象月を一旦クリアして再生成（ただし手修正済みの打刻は保持）
+    Object.keys(PUNCHLOG[code]).forEach(d=>{if(d.startsWith(ym)&&!(PUNCHLOG[code][d]&&PUNCHLOG[code][d].edited))delete PUNCHLOG[code][d];});
+    const h=hashId(code);
+    const lateDay=(h%20)+2, earlyDay=(h%16)+6; // この人が遅刻/早退する日
+    Object.entries(SHIFTPLAN[code]).forEach(([date,sh])=>{
+      if(!date.startsWith(ym))return;
+      if(PUNCHLOG[code][date]&&PUNCHLOG[code][date].edited)return; // 手修正済みは再生成しない
+      if(LEAVEPLAN[code]&&LEAVEPLAN[code][date])return; // 休み/有給は打刻なし
+      const day=Number(date.slice(8,10));
+      if(rnd(h+day)<0.05)return;                        // まれに欠勤
+      let inM=toMin(sh.start)+Math.round(rnd(h+day*2)*12-8);   // -8〜+4
+      let outM=toMin(sh.end)+Math.round(rnd(h+day*3)*15-5);    // -5〜+10
+      if(day===lateDay)inM=toMin(sh.start)+25;          // 遅刻
+      if(day===earlyDay)outM=toMin(sh.end)-30;          // 早退
+      PUNCHLOG[code][date]={in:hmOf(Math.max(0,inM)),out:hmOf(outM)};
+    });
+  });
+}
+// デモ用：当月の打刻ログを自動生成（保存が無い場合のみ）。日〜は休診、休診カレンダー対象日は除外
+function seedPunchLog(){
+  const [y,mo]=DEMO_MONTH.split('-').map(Number);
+  const days=new Date(y,mo,0).getDate();
+  STAFF.forEach((s,si)=>{
+    PUNCHLOG[s.id]=PUNCHLOG[s.id]||{};
+    for(let d=1;d<=days;d++){
+      const date=`${DEMO_MONTH}-${pad2(d)}`;
+      if(PUNCHLOG[s.id][date])continue;
+      const dow=new Date(y,mo-1,d).getDay();
+      if(dow===0)continue;                       // 日曜は休診
+      if(closureFor(s,date))continue;            // 診療カレンダーで休診の枠は出勤なし
+      const r1=rnd(si*7+d), r2=rnd(si*13+d*3);
+      if(r1<0.06)continue;                       // ごく稀に欠勤
+      const inMin=toMin(s.shift.s)+Math.round((r1-0.4)*16);   // 概ね定時前後
+      let outMin=toMin(s.shift.e)+Math.round((r2-0.3)*40);    // 退勤は遅れがち
+      if(r2>0.9)outMin+=60;                       // たまに大きめ残業
+      PUNCHLOG[s.id][date]={in:`${pad2(Math.floor(inMin/60))}:${pad2(inMin%60)}`,out:`${pad2(Math.floor(outMin/60))}:${pad2(outMin%60)}`};
+    }
+  });
+}
+// 1か月を集計し、税理士CSV(18列)に対応した行配列を返す
+function aggregateMonthRows(ym){
+  return STAFF.map(s=>{
+    const log=PUNCHLOG[s.id]||{};
+    const plan=SHIFTPLAN[s.id]||null;
+    const lv=LEAVEPLAN[s.id]||null;
+    let days=0,net=0,brk=0,ot=0,night=0,lateN=0,lateMin=0,earlyN=0,earlyMin=0,absent=0;
+    const nb=NIGHT_BAND||(WAGE_BANDS[s.loc]||[]).find(x=>x.label==='夜外来');
+    Object.keys(log).filter(d=>d.startsWith(ym)).forEach(d=>{
+      const r=log[d];if(!r||!r.in||!r.out)return;
+      const g=toMin(r.out)-toMin(r.in);if(g<=0)return;
+      const b=autoBreak(g), nt=g-b;
+      days++; net+=nt; brk+=b; ot+=Math.max(0,nt-480);
+      if(nb)night+=Math.max(0,Math.min(toMin(r.out),toMin(nb.e||nb.end))-Math.max(toMin(r.in),toMin(nb.s||nb.start)));
+      const sh=(plan&&plan[d])||{start:s.shift.s,end:s.shift.e}; // 予定シフト優先
+      const din=toMin(r.in)-toMin(sh.start); if(din>TOL){lateN++;lateMin+=din;}
+      const dout=toMin(sh.end)-toMin(r.out); if(dout>TOL){earlyN++;earlyMin+=dout;}
+    });
+    // 欠勤回数 ＝ 予定シフトがある日に、休み/有給でなく、打刻も無い（取込時のみ算出）
+    if(plan)Object.keys(plan).filter(d=>d.startsWith(ym)).forEach(d=>{
+      const punched=log[d]&&log[d].in&&log[d].out;
+      const excused=lv&&lv[d];
+      if(!punched&&!excused&&!closureFor(s,d))absent++; // 担当枠が全て休診なら欠勤に数えない
+    });
+    // 有休日数(当月取得)・月末有休残 ＝ シフト側 paidLeave（granted−取得）から
+    const usedLeave = (PAID[s.id]!=null)
+      ? paidUsedInMonth(s.id,ym)
+      : REQUESTS.filter(q=>q.staff==s.id&&q.type==='leave'&&q.status==='approved'&&(q.date||'').startsWith(ym)).length;
+    const remainLeave = paidRemain(s.id); // null なら空欄
+    // CSV_HEADER の並びに対応（実シフト外労働/実深夜/有休時間は未算出のため空）
+    return [s.id, s.name, LOCATIONS.find(l=>l.id===s.loc).name,
+      days||'', absent||'', lateN||'', earlyN||'',
+      fmtDur(net), fmtDur(brk), fmtDur(lateMin), fmtDur(earlyMin),
+      '', fmtDur(ot), '', usedLeave||'', (remainLeave!=null?remainLeave:''), '', fmtDur(night)];
+  });
+}
+function importSummaryHTML(){
+  if(!IMPORT_INFO)return '<p class="muted">まだ取り込んでいません。</p>';
+  const r=IMPORT_INFO.report||[];const ng=r.filter(x=>!x.ok);
+  return `<div class="note">取込月 <b>${IMPORT_INFO.month||'—'}</b> ／ 予定シフトのある人 <b>${Object.keys(SHIFTPLAN).length}</b>名 ／ 突合NG <b>${ng.length}</b>件。${NIGHT_BAND?`夜外来時間は <b>${NIGHT_BAND.s}–${NIGHT_BAND.e}</b> を取得。`:''} 集計タブ「打刻集計」の欠勤回数・遅刻/早退に反映されます。</div>
+    <div style="overflow:auto;max-height:320px"><table style="font-size:12px"><thead><tr><th>職種</th><th>シフト氏名</th><th>code</th><th>突合結果</th></tr></thead>
+    <tbody>${r.map(x=>`<tr><td>${x.job}</td><td>${x.name}</td><td>${x.code||'—'}</td><td>${x.ok?`<span class="pill ok">${x.resolved}</span>`:`<span class="pill over">${x.reason||'NG'}</span>`}</td></tr>`).join('')}</tbody></table></div>`;
+}
+
+// 勤続年数から法定有給付与日数
+function statutoryLeave(hire){
+  const months=(new Date(today)-new Date(hire))/(1000*60*60*24*30.4);
+  if(months<6)return 0;
+  const y=Math.floor((months-6)/12); // 6ヶ月時点=0年目
+  const table=[10,11,12,14,16,18,20];
+  return table[Math.min(y,6)];
+}
+
+// 時間帯別（通常/夜）労働時間を分で
+function bandSplit(rec,loc){
+  const out={};(WAGE_BANDS[loc]||[]).forEach(b=>out[b.label]=0);
+  if(!rec||!rec.in||!rec.out)return out;
+  const ci=toMin(rec.in),co=toMin(rec.out);
+  (WAGE_BANDS[loc]||[]).forEach(b=>{
+    const bs=toMin(b.start),be=toMin(b.end);
+    const ov=Math.max(0,Math.min(co,be)-Math.max(ci,bs));
+    out[b.label]=ov;
+  });
+  return out;
+}
+
+/* 差異判定 */
+function diffStatus(s){
+  if(!s.rec||!s.rec.in)return{tags:[{t:'未打刻',c:'over'}]};
+  const tags=[];
+  const din=toMin(s.rec.in)-toMin(s.shift.s);
+  const dout=(s.rec.out?toMin(s.rec.out):null);
+  if(din>TOL)tags.push({t:`遅刻 +${din}分`,c:'late'});
+  if(din<-TOL)tags.push({t:`早出 ${din}分`,c:'ok'});
+  if(dout!=null){
+    const d=dout-toMin(s.shift.e);
+    if(d>TOL)tags.push({t:`残業 +${d}分`,c:'over'});
+    if(d<-TOL)tags.push({t:`早退 ${d}分`,c:'late'});
+  }
+  if(tags.length===0)tags.push({t:'定時どおり',c:'ok'});
+  return{tags,din,dout};
+}
+
+// 8時間超チェック
+function legalFlags(s){
+  const f=[];const nw=netWork(s.rec);
+  if(nw!=null&&nw>480)f.push(`1日8時間超(${toHM(nw)})`);
+  // 月希望上限（デモは本日労働×20日で概算）
+  const monthly=(nw||0)*20/60;
+  if(s.desired&&monthly>s.desired)f.push(`希望就業${s.desired}h超過見込`);
+  return f;
+}
+
+// 診察終了中央値（同枠の退勤）と逸脱者
+function medianBySlot(){
+  const slots={};
+  locStaff().forEach(s=>{if(s.rec&&s.rec.out){(slots[s.slot]=slots[s.slot]||[]).push(s);}});
+  const res={};
+  for(const slot in slots){
+    const arr=slots[slot];const outs=arr.map(s=>toMin(s.rec.out)).sort((a,b)=>a-b);
+    const n=outs.length;const med=n%2?outs[(n-1)/2]:Math.round((outs[n/2-1]+outs[n/2])/2);
+    const dev=arr.filter(s=>toMin(s.rec.out)-med>=20);
+    res[slot]={med,members:arr,dev};
+  }
+  return res;
+}
+
+/* ============ 描画：iPad ============ */
+/* ===== ビー玉プール（物理シミュレーション） ===== */
+let MARBLES=[];           // {s, el, x,y,vx,vy,r, working,done,closed, dragging}
+let marbleRAF=null, marbleLast=0;
+let tiltGX=0;             // -1..1（傾き）
+function marbleRadius(W,H,n){ if(n<1)n=1; const a=(W*H)/n; return Math.max(28,Math.min(56, Math.sqrt(a/Math.PI)*0.62)); }
+function marbleStatus(s){
+  const working=s.rec&&s.rec.in&&!s.rec.out;
+  const done=s.rec&&s.rec.out;
+  const cl=closureFor(s,today);
+  const closed=cl && !(s.rec&&s.rec.in);
+  return {working:!!working,done:!!done,closed:!!closed};
+}
+function updateMarble(m){
+  const st=marbleStatus(m.s); m.working=st.working; m.done=st.done; m.closed=st.closed;
+  const inflating=m.el.classList.contains('inflate');
+  m.el.className='marble'+(m.working?' working':m.done?' done':m.closed?' closed':'')+(inflating?' inflate':'');
+  const ic=AVATAR_PREF[m.s.id]&&AVATAR_PREF[m.s.id].icon;
+  const emo=(ic&&ic!=='initial')?`<span class="em">${ic}</span>`:'';
+  m.el.innerHTML=`<div class="nm">${emo}${m.s.name}</div>`;
+  m.el.style.background=`radial-gradient(circle at 32% 26%, rgba(255,255,255,.75), rgba(255,255,255,0) 46%), ${staffColor(m.s)}`;
+  // 風船（出勤中）は一回り大きく膨らむ。下のボールより大きい
+  m.r=(m.baseR||40)*(m.working?1.18:1);
+  sizeMarble(m);
+}
+function sizeMarble(m){
+  const d=Math.round(m.r*2);
+  m.el.style.width=d+'px'; m.el.style.height=d+'px';
+  m.el.style.fontSize=Math.max(11,Math.min(18,Math.round(m.r*0.42)))+'px';
+}
+function createMarble(s,pool){
+  const el=document.createElement('div'); el.className='marble';
+  pool.appendChild(el);
+  const W=pool.clientWidth||600, H=pool.clientHeight||500;
+  const m={s,el,x:40+Math.random()*(W-80),y:H-60-Math.random()*60,vx:(Math.random()-.5)*200,vy:0,r:40,baseR:40,dragging:false,phase:Math.random()*6.28};
+  // ドラッグ＆タップ
+  el.addEventListener('pointerdown',e=>{e.preventDefault();m.dragging=true;el.classList.add('grab');try{el.setPointerCapture(e.pointerId);}catch(_){}m._mv=0;m._t0=performance.now();m._lx=e.clientX;m._ly=e.clientY;});
+  el.addEventListener('pointermove',e=>{ if(!m.dragging)return; const rc=pool.getBoundingClientRect();
+    m.x=e.clientX-rc.left; m.y=e.clientY-rc.top; m._mv+=Math.abs(e.clientX-m._lx)+Math.abs(e.clientY-m._ly);
+    m.vx=Math.max(-2200,Math.min(2200,(e.clientX-m._lx)*30)); m.vy=Math.max(-2200,Math.min(2200,(e.clientY-m._ly)*30));
+    m._lx=e.clientX; m._ly=e.clientY; });
+  const endDrag=e=>{ if(!m.dragging)return; m.dragging=false; el.classList.remove('grab');
+    if(m._mv<8 && performance.now()-m._t0<500) openPunch(m.s); };
+  el.addEventListener('pointerup',endDrag); el.addEventListener('pointercancel',endDrag);
+  return m;
+}
+function renderIpad(){
+  const pool=$('#marblePool'); if(!pool)return;
+  const list=locStaff().filter(s=>!isHidden(s.id)); // 非表示（退職・休職など）は出さない
+  let msg=pool.querySelector('.pool-empty');
+  if(!list.length){
+    MARBLES.forEach(m=>m.el.remove()); MARBLES=[];
+    if(!msg){msg=document.createElement('div');msg.className='pool-empty muted';msg.style.cssText='position:absolute;inset:0;display:flex;align-items:center;justify-content:center;text-align:center;padding:20px';pool.appendChild(msg);}
+    msg.textContent='表示するスタッフがいません。管理者 › スタッフ設定で表示する人を選んでください。';
+    return;
+  }
+  if(msg)msg.remove();
+  const ids=new Set(list.map(s=>s.id));
+  MARBLES=MARBLES.filter(m=>{ if(!ids.has(m.s.id)){m.el.remove();return false;} return true;});
+  list.forEach(s=>{ let m=MARBLES.find(m=>m.s.id===s.id); if(!m){m=createMarble(s,pool);MARBLES.push(m);} else m.s=s; });
+  const W=pool.clientWidth||600, H=pool.clientHeight||500, r=marbleRadius(W,H,list.length);
+  MARBLES.forEach(m=>{ m.baseR=r; updateMarble(m); m.x=Math.max(m.r,Math.min(W-m.r,m.x)); m.y=Math.max(m.r,Math.min(H-m.r,m.y)); });
+  if(!marbleRAF){marbleLast=performance.now(); marbleRAF=requestAnimationFrame(marbleLoop);}
+  // ボタン（毎回バインドし直しても安全）
+  const tb=$('#tiltBtn'); if(tb)tb.onclick=enableTilt;
+  const sb=$('#shakeBtn'); if(sb)sb.onclick=()=>{MARBLES.forEach(m=>{m.vx+=(Math.random()-.5)*1600;m.vy-=Math.random()*800;});};
+  // MacBook用：◀▶ ボタンを押している間だけ転がす
+  const rl=$('#rollL'), rr=$('#rollR');
+  const dn=v=>e=>{e.preventDefault();tiltGX=v;}, up=()=>{tiltGX=0;};
+  if(rl){rl.onpointerdown=dn(-0.85);rl.onpointerup=up;rl.onpointerleave=up;rl.onpointercancel=up;}
+  if(rr){rr.onpointerdown=dn(0.85);rr.onpointerup=up;rr.onpointerleave=up;rr.onpointercancel=up;}
+}
+function stepMarbles(dt){
+  const pool=$('#marblePool'); if(!pool)return;
+  const W=pool.clientWidth, H=pool.clientHeight, G=1500;
+  const t=performance.now()/1000;
+  MARBLES.forEach(m=>{
+    if(m.dragging)return;
+    if(m.working){
+      // 風船：ゆっくり優雅に上昇＋そよ風でゆらゆら
+      const riseV=-58;                                   // 上昇のターミナル速度（小さい＝ゆっくり）
+      m.vy += (riseV - m.vy)*Math.min(1,dt*0.9);         // ゆっくり目標速度へ寄せる
+      const breeze=Math.sin(t*0.7+m.phase)*22+Math.sin(t*1.7+m.phase*1.7)*8; // 風のゆらぎ（横加速度）
+      m.vx += breeze*dt - tiltGX*G*0.35*dt;              // 風船は浮力なので傾けた向きと逆（上側）へ流れる
+      m.vx *= 0.94;                                       // 横はやわらかく減衰
+      m.vy *= 0.985;
+    }else{
+      // 未出勤・退勤済：ビー玉として下に転がる
+      m.vy += G*dt; m.vx += tiltGX*G*dt;
+      m.vx *= 0.992; m.vy *= 0.992;
+    }
+    m.x+=m.vx*dt; m.y+=m.vy*dt;
+    if(m.x<m.r){m.x=m.r;m.vx=-m.vx*0.45;} if(m.x>W-m.r){m.x=W-m.r;m.vx=-m.vx*0.45;}
+    if(m.y<m.r){m.y=m.r;m.vy=-m.vy*(m.working?0.25:0.45);} if(m.y>H-m.r){m.y=H-m.r;m.vy=-m.vy*0.45;m.vx*=0.92;}
+  });
+  for(let i=0;i<MARBLES.length;i++)for(let j=i+1;j<MARBLES.length;j++){
+    const a=MARBLES[i],b=MARBLES[j]; let dx=b.x-a.x,dy=b.y-a.y; let d=Math.hypot(dx,dy); const min=a.r+b.r;
+    if(d>0&&d<min){ const ov=min-d, nx=dx/d, ny=dy/d, push=ov/2;
+      if(!a.dragging){a.x-=nx*push;a.y-=ny*push;} if(!b.dragging){b.x+=nx*push;b.y+=ny*push;}
+      const rvx=b.vx-a.vx, rvy=b.vy-a.vy, vn=rvx*nx+rvy*ny;
+      if(vn<0){ const imp=-1.4*vn/2; a.vx-=imp*nx;a.vy-=imp*ny; b.vx+=imp*nx;b.vy+=imp*ny; }
+    }
+  }
+}
+function drawMarbles(){ MARBLES.forEach(m=>{ m.el.style.left=(m.x-m.r)+'px'; m.el.style.top=(m.y-m.r)+'px'; }); }
+function marbleLoop(ts){
+  const v=$('#view-ipad'); if(!v||!v.classList.contains('active')){marbleRAF=null;return;}
+  const dt=Math.min(0.032,((ts-marbleLast)/1000)||0.016); marbleLast=ts;
+  stepMarbles(dt); drawMarbles(); marbleRAF=requestAnimationFrame(marbleLoop);
+}
+function popMarble(id,kind){
+  const m=MARBLES.find(x=>x.s.id===id); if(!m)return;
+  m.el.classList.remove('pop','inflate'); void m.el.offsetWidth;
+  if(kind==='in'){
+    // ヘリウム注入：ぷっと膨らんで、ふわふわ浮き上がる
+    m.el.classList.add('inflate');
+    setTimeout(()=>m.el.classList.remove('inflate'),1100);
+    m.vy=-80; m.vx+=(Math.random()-.5)*40;
+  }else{
+    m.el.classList.add('pop');                               // 退勤＝しぼんで下へ
+    m.vy=200;
+  }
+}
+function enableTilt(){
+  const handler=ev=>{ const g=ev.gamma; if(g==null)return; tiltGX=Math.max(-1,Math.min(1,g/40)); };
+  if(typeof DeviceOrientationEvent!=='undefined' && typeof DeviceOrientationEvent.requestPermission==='function'){
+    DeviceOrientationEvent.requestPermission().then(p=>{ if(p==='granted'){window.addEventListener('deviceorientation',handler);toast('傾きセンサー オン：iPadを左右に傾けてみてください');} else toast('傾きの使用が許可されませんでした'); }).catch(()=>toast('この端末では傾きを使えません'));
+  }else if(typeof DeviceOrientationEvent!=='undefined'){
+    window.addEventListener('deviceorientation',handler); toast('傾きセンサー オン：端末を左右に傾けてみてください');
+  }else toast('この端末は傾きセンサーに対応していません');
+}
+// MacBook等：矢印キー（←→）／A・Dで左右に転がす（打刻画面のときだけ）
+window.addEventListener('keydown',e=>{
+  const v=$('#view-ipad'); if(!v||!v.classList.contains('active'))return;
+  if(e.key==='ArrowLeft'||e.key==='a'){tiltGX=-0.85;e.preventDefault();}
+  else if(e.key==='ArrowRight'||e.key==='d'){tiltGX=0.85;e.preventDefault();}
+});
+window.addEventListener('keyup',e=>{ if(['ArrowLeft','ArrowRight','a','d'].includes(e.key))tiltGX=0; });
+function nowHM(){const d=new Date();return `${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;}
+function openPunch(s){
+  const working=s.rec&&s.rec.in&&!s.rec.out;
+  const done=s.rec&&s.rec.out;
+  const box=$('#modalBox');box.style.maxWidth='';
+  const cl=closureFor(s,today);
+  box.innerHTML=`
+    ${avatarHTML(s)}
+    <h3>${s.name}</h3>
+    ${cl?`<div class="pill closed" style="margin:6px 0">${cl.type}：${cl.note||''}</div>`:''}
+    <div class="muted">${done?'本日は退勤済みです':working?`出勤 ${s.rec.in} / 勤務中`:cl?'診療予定の変更があります（出勤は任意）':'まだ出勤していません'}</div>
+    <button class="bigbtn in" id="btnIn" ${working||done?'disabled':''}>🟢 出勤</button>
+    <button class="bigbtn out" id="btnOut" ${working?'':'disabled'}>🟠 退勤</button>
+    <button class="linkbtn" id="btnClose">閉じる</button>`;
+  $('#modalBg').classList.add('show');
+  $('#btnClose').onclick=closeModal;
+  $('#btnIn').onclick=()=>{s.rec={in:nowHM(),out:null};logPunch(s);saveState();closeModal();renderIpad();popMarble(s.id,'in');toast(`${s.name} さん 出勤を記録しました（${s.rec.in}）`);};
+  $('#btnOut').onclick=()=>{s.rec.out=nowHM();logPunch(s);saveState();closeModal();renderIpad();popMarble(s.id,'out');toast(`${s.name} さん 退勤を記録しました（${s.rec.out}）`);};
+}
+function closeModal(){$('#modalBg').classList.remove('show');}
+$('#modalBg').onclick=e=>{if(e.target.id==='modalBg')closeModal();};
+
+/* ============ 描画：スタッフ ============ */
+function fillStaffSelect(){
+  const sel=$('#loginStaff');if(!sel)return;sel.innerHTML='';
+  STAFF.forEach(s=>{const o=document.createElement('option');o.value=s.id;o.textContent=`${s.name}（${LOCATIONS.find(l=>l.id===s.loc).name}）`;sel.appendChild(o);});
+}
+function verifyStaffPin(code,pin){
+  const rec=STAFF_PIN[code];
+  if(rec)return String(pin)===String(rec);       // 本人PINと一致のみ許可
+  // 取り込み済み運用中は、PIN未設定の人に 0000 を許可しない（なりすまし防止）
+  if(Object.keys(STAFF_PIN).length>0)return false;
+  return pin==='0000';                            // 完全未取込のデモ時のみ
+}
+function staffLogout(){staffAuthed=null;renderStaff();}
+function renderStaff(){
+  // 未認証ならログイン画面のみ表示（他人は一切見えない）
+  if(!staffAuthed){
+    $('#staffLogin').style.display='';
+    $('#staffBody').style.display='none';
+    $('#loginMsg').textContent='';
+    const pe=$('#loginPin');if(pe)pe.value='';
+    return;
+  }
+  $('#staffLogin').style.display='none';
+  $('#staffBody').style.display='';
+  const s=STAFF.find(x=>x.id==staffAuthed);
+  const nm=$('#meName');if(nm)nm.textContent=`${s.name}（${LOCATIONS.find(l=>l.id===s.loc).name}）`;
+  // 本人ページは PUNCHLOG（取込月＝DEMO_MONTH）を参照（シフトアプリの勤務状況と一致）
+  const mlog=PUNCHLOG[s.id]||{};
+  const todayRec=mlog[today];
+  $('#meStatus').textContent=todayRec?(todayRec.out?'退勤済':'勤務中'):'未出勤';
+  let monthMin=0; Object.keys(mlog).filter(d=>d.startsWith(DEMO_MONTH)).forEach(d=>{const n=netWork(mlog[d]);if(n)monthMin+=n;});
+  $('#meMonthH').textContent=monthMin?`${(monthMin/60).toFixed(1)}h`:'—';
+  const rem=paidRemain(s.id);
+  if(rem!=null){
+    $('#meLeave').textContent=`${rem}日`;
+    $('#meLeaveNote').textContent=`有給残＝付与${paidGranted(s.id)}−取得${paidUsedTotal(s.id)}（全休1/半休0.5）`;
+  }else{
+    const lv=LEAVE[s.id]||{grant:0,used:0};
+    $('#meLeave').textContent=`${lv.grant-lv.used}日`;
+    $('#meLeaveNote').textContent='有給 残日数（シフト取込前はデモ値）';
+  }
+  $('#meDesired').textContent=s.desired?`${(s.desired-monthMin/60).toFixed(0)}h`:'—';
+  renderStaffPane($('#staffTabs button.active').dataset.t,s);
+}
+function renderStaffPane(tab,s){
+  const p=$('#staffPane');
+  if(tab==='hist'){
+    const log=PUNCHLOG[s.id]||{};
+    const plan=SHIFTPLAN[s.id]||{};
+    const days=Object.keys(log).filter(d=>d.startsWith(DEMO_MONTH)).sort().reverse();
+    const verdict=(r,sh)=>{const t=[];
+      if(sh){const di=toMin(r.in)-toMin(sh.start); if(di>TOL)t.push(['遅刻+'+di+'分','late']); else if(di<-TOL)t.push(['早出'+di+'分','ok']);
+        if(r.out){const dd=toMin(r.out)-toMin(sh.end); if(dd>TOL)t.push(['残業+'+dd+'分','over']); else if(dd<-TOL)t.push(['早退'+dd+'分','late']);}}
+      const nw=netWork(r); if(nw!=null&&nw>480)t.push(['法定残業+'+(nw-480)+'分','over']);
+      if(!t.length)t.push(['定時どおり','ok']); return t;};
+    let tot=0;
+    const body=days.map(d=>{const r=log[d];const sh=plan[d];const nw=netWork(r);if(nw)tot+=nw;
+      return `<tr><td>${d}</td><td>${sh?`${sh.start}–${sh.end}`:'—'}</td><td>${r.in||'—'}</td><td>${r.out||'—'}</td>
+      <td>${toHM(nw)}</td><td>${verdict(r,sh).map(x=>`<span class="pill ${x[1]}">${x[0]}</span>`).join(' ')}</td></tr>`;}).join('');
+    p.innerHTML=days.length
+      ? `<table><thead><tr><th>日付</th><th>シフト</th><th>出勤</th><th>退勤</th><th>実働</th><th>判定</th></tr></thead><tbody>${body}</tbody></table>
+         <div class="note">${DEMO_MONTH} の打刻履歴（${days.length}日／実働合計 ${toHM(tot)}）。シフトアプリの「勤務状況」と同じデータです。</div>`
+      : `<p class="muted">${DEMO_MONTH} の打刻記録がありません。管理者がシフト取込→クラウド保存をすると表示されます。</p>`;
+  }else if(tab==='leave'){
+    const lv=LEAVE[s.id]||{grant:0,used:0};
+    const stat=statutoryLeave(s.hire);
+    p.innerHTML=`
+      <p>勤務開始日：<b>${s.hire}</b> ／ 法定付与日数：<b>${stat}日</b> ／ 残日数：<b>${lv.grant-lv.used}日</b></p>
+      <div class="row">
+        <input type="date" id="lvDate" value="${today}">
+        <select class="f" id="lvType"><option>全休</option><option>半休（午前）</option><option>半休（午後）</option><option>時間単位</option></select>
+        <button class="btn" id="lvBtn">有給を申請</button>
+      </div>
+      <div id="myReq" style="margin-top:14px"></div>`;
+    $('#lvBtn').onclick=()=>{
+      REQUESTS.push({id:Date.now(),staff:s.id,type:'leave',date:$('#lvDate').value,detail:$('#lvType').value,status:'pending'});
+      saveState();toast('有給を申請しました（管理者の承認待ち）');renderStaffPane('leave',s);refreshAdminKpi();
+    };
+    myReq(s);
+  }else if(tab==='fix'){
+    p.innerHTML=`
+      <p class="muted">打刻ミス（押し忘れ・押し間違い）があった場合、正しい時刻に修正を依頼できます。依頼は管理者が承認すると打刻に反映されます。</p>
+      <div class="card" style="background:var(--soft);border:0;margin-bottom:14px">
+        <div class="muted" style="font-size:12px">現在の打刻（${today}）</div>
+        <div style="font-size:16px;font-weight:700;margin-top:4px">
+          出勤 ${s.rec?.in||'—'} ／ 退勤 ${s.rec?.out||'—'}
+        </div>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;align-items:end">
+        <label>対象日<br><input type="date" id="fxDate" value="${today}" style="width:100%"></label>
+        <label>正しい出勤<br><input type="time" id="fxIn" value="${s.rec?.in||''}" style="width:100%"></label>
+        <label>正しい退勤<br><input type="time" id="fxOut" value="${s.rec?.out||''}" style="width:100%"></label>
+        <label>理由<br>
+          <select class="f" id="fxReason" style="width:100%">
+            <option>打刻忘れ</option><option>出勤の押し忘れ</option><option>退勤の押し忘れ</option>
+            <option>時刻の押し間違い</option><option>二重打刻</option><option>その他</option>
+          </select>
+        </label>
+      </div>
+      <label style="display:block;margin-top:10px">補足コメント（任意）<br>
+        <input id="fxNote" placeholder="例：受付対応で退勤打刻を忘れました" style="width:100%"></label>
+      <div class="row" style="margin-top:12px"><button class="btn" id="fxBtn">修正を依頼する</button></div>
+      <div id="myReq" style="margin-top:18px"></div>`;
+    $('#fxBtn').onclick=()=>{
+      const ni=$('#fxIn').value, no=$('#fxOut').value;
+      if(!ni&&!no){toast('修正後の時刻を入力してください');return;}
+      REQUESTS.push({id:Date.now(),staff:s.id,type:'correction',date:$('#fxDate').value,
+        newIn:ni,newOut:no,reason:$('#fxReason').value,note:$('#fxNote').value,
+        detail:`【${$('#fxReason').value}】出勤${ni||'—'} / 退勤${no||'—'} に修正希望${$('#fxNote').value?'（'+$('#fxNote').value+'）':''}`,
+        status:'pending'});
+      saveState();toast('修正を依頼しました（管理者の承認待ち）');renderStaffPane('fix',s);refreshAdminKpi();
+    };
+    myReq(s);
+  }else if(tab==='icon'){
+    const pref=AVATAR_PREF[s.id]||{};
+    p.innerHTML=`
+      <p class="muted">打刻画面に表示される自分のアイコンを設定できます。設定は保存され、状態（未出勤/勤務中/勤務終了）に応じて明るさが変わります。</p>
+      <div class="row" style="align-items:flex-end;gap:24px;margin-bottom:6px">
+        <div style="text-align:center">
+          <div id="avPreview"></div>
+          <div class="muted" style="font-size:11px;margin-top:4px">プレビュー</div>
+        </div>
+        <div style="flex:1">
+          <h2 style="font-size:13px;margin:0 0 6px">色</h2>
+          <div class="row" id="palette" style="gap:8px"></div>
+          <h2 style="font-size:13px;margin:14px 0 6px">形</h2>
+          <div class="row" id="shapes" style="gap:8px"></div>
+          <h2 style="font-size:13px;margin:14px 0 6px">アイコン（絵文字 / 名前の頭文字）</h2>
+          <div class="row" id="icons" style="gap:8px"></div>
+        </div>
+      </div>
+      <div class="row" style="margin-top:10px">
+        <button class="btn" id="avSave">保存</button>
+        <button class="btn ghost" id="avReset">初期設定に戻す</button>
+      </div>`;
+
+    // 作業用の一時設定
+    let draft={color:staffColor(s),shape:staffShape(s),icon:(pref.icon||'initial')};
+    const previewAvatar=()=>{
+      const shp=draft.shape==='sq'?' sq':'';
+      const ic=(!draft.icon||draft.icon==='initial')?initials(s.name):draft.icon;
+      $('#avPreview').innerHTML=`<div class="avatar${shp}" style="width:72px;height:72px;font-size:30px;filter:none;opacity:1;background:${draft.color}">${ic}</div>`;
+    };
+    // 色パレット
+    $('#palette').innerHTML=PALETTE.map(c=>`<button data-c="${c}" class="swcolor" style="width:30px;height:30px;border-radius:50%;border:2px solid #fff;box-shadow:0 0 0 1px #cbd5e1;background:${c};cursor:pointer"></button>`).join('');
+    $$('#palette .swcolor').forEach(b=>b.onclick=()=>{draft.color=b.dataset.c;markSel();previewAvatar();});
+    // 形
+    $('#shapes').innerHTML=[['circle','● 丸'],['sq','■ 角丸']].map(([v,l])=>`<button data-s="${v}" class="swshape btn ghost mini">${l}</button>`).join('');
+    $$('#shapes .swshape').forEach(b=>b.onclick=()=>{draft.shape=b.dataset.s;markSel();previewAvatar();});
+    // アイコン
+    $('#icons').innerHTML=ICON_CHOICES.map(ic=>`<button data-i="${ic}" class="swicon btn ghost mini" style="font-size:16px">${ic==='initial'?'頭文字':ic}</button>`).join('');
+    $$('#icons .swicon').forEach(b=>b.onclick=()=>{draft.icon=b.dataset.i;markSel();previewAvatar();});
+
+    const markSel=()=>{
+      $$('#palette .swcolor').forEach(b=>b.style.outline=(b.dataset.c===draft.color)?'3px solid #0f172a':'none');
+      $$('#shapes .swshape').forEach(b=>b.classList.toggle('active',b.dataset.s===draft.shape));
+      $$('#icons .swicon').forEach(b=>b.classList.toggle('active',b.dataset.i===draft.icon));
+    };
+    markSel();previewAvatar();
+
+    $('#avSave').onclick=()=>{
+      AVATAR_PREF[s.id]={color:draft.color,shape:draft.shape,icon:draft.icon};
+      saveAvatarPref();toast('アイコンを保存しました');
+    };
+    $('#avReset').onclick=()=>{
+      delete AVATAR_PREF[s.id];saveAvatarPref();
+      draft={color:staffColor(s),shape:staffShape(s),icon:'initial'};
+      markSel();previewAvatar();toast('初期設定に戻しました');
+    };
+  }
+}
+function myReq(s){
+  const mine=REQUESTS.filter(r=>r.staff==s.id);
+  $('#myReq').innerHTML=`<h2 style="font-size:13px">自分の申請</h2>`+(mine.length?
+    `<table><tbody>${mine.map(r=>`<tr><td>${typeLabel(r.type)}</td><td>${r.date}</td><td>${r.detail}</td>
+      <td><span class="pill ${r.status==='approved'?'ok':r.status==='rejected'?'over':'late'}">${statusLabel(r.status)}</span></td></tr>`).join('')}</tbody></table>`
+    :`<p class="muted">申請はありません。</p>`);
+}
+const typeLabel=t=>({leave:'有給',overtime:'残業',correction:'打刻修正'}[t]||t);
+const statusLabel=s=>({pending:'承認待ち',approved:'承認済',rejected:'却下'}[s]||s);
+
+/* ============ 描画：管理者 ============ */
+function refreshAdminKpi(){
+  const working=locStaff().filter(s=>s.rec&&s.rec.in&&!s.rec.out).length;
+  $('#adWorking').textContent=working;
+  const pend=REQUESTS.filter(r=>r.status==='pending').length;
+  $('#adPending').textContent=pend;
+  const badge=$('#apprCount');if(badge){badge.textContent=pend;badge.style.display=pend?'inline-block':'none';}
+  let al=0;locStaff().forEach(s=>al+=legalFlags(s).length);
+  $('#adAlert').textContent=al;
+  const md=medianBySlot();let dev=0;for(const k in md)dev+=md[k].dev.length;
+  $('#adDev').textContent=dev;
+}
+// ダッシュボードの数字をダブルクリック→該当者一覧をモーダル表示
+function openListModal(title,bodyHtml){
+  const box=$('#modalBox');
+  box.style.maxWidth='560px';
+  box.innerHTML=`<h3 style="margin:0 0 10px;font-size:18px">${title}</h3>
+    <div style="text-align:left;max-height:60vh;overflow:auto">${bodyHtml}</div>
+    <button class="btn ghost" style="margin-top:12px" onclick="closeModal()">閉じる</button>`;
+  $('#modalBg').classList.add('show');
+}
+function kpiDetail(type){
+  let title='', body='';
+  if(type==='working'){
+    const list=locStaff().filter(s=>s.rec&&s.rec.in&&!s.rec.out);
+    title=`勤務中（${list.length}名）`;
+    body=list.length?`<table><thead><tr><th>氏名</th><th>枠</th><th>出勤</th></tr></thead><tbody>${
+      list.map(s=>`<tr><td>${s.name}</td><td>${s.slot||''}</td><td>${s.rec.in}</td></tr>`).join('')}</tbody></table>`
+      :'<p class="muted">該当者はいません。</p>';
+  }else if(type==='pending'){
+    const list=REQUESTS.filter(r=>r.status==='pending');
+    title=`未承認の申請（${list.length}件）`;
+    body=list.length?`<table><thead><tr><th>種別</th><th>氏名</th><th>日付</th><th>内容</th></tr></thead><tbody>${
+      list.map(r=>{const st=STAFF.find(s=>s.id==r.staff);return `<tr><td>${typeLabel(r.type)}</td><td>${st?st.name:''}</td><td>${r.date}</td><td>${r.detail||''}</td></tr>`;}).join('')}</tbody></table>
+      <p class="muted" style="font-size:12px">※ スタッフからの打刻修正申告は「申請の承認」タブで確認・承認します。</p>`
+      :'<p class="muted">未承認の申請はありません。</p>';
+  }else if(type==='alert'){
+    const list=locStaff().map(s=>({s,f:legalFlags(s)})).filter(x=>x.f.length);
+    title=`法定アラート（${list.reduce((n,x)=>n+x.f.length,0)}件）`;
+    body=list.length?`<table><thead><tr><th>氏名</th><th>内容</th></tr></thead><tbody>${
+      list.map(x=>`<tr><td>${x.s.name}</td><td>${x.f.map(f=>`<span class="pill over">${f}</span>`).join(' ')}</td></tr>`).join('')}</tbody></table>`
+      :'<p class="muted">法定アラートはありません。</p>';
+  }else if(type==='dev'){
+    const md=medianBySlot();
+    let rows='';
+    Object.keys(md).forEach(slot=>{const m=md[slot];
+      m.dev.forEach(s=>{const diff=toMin(s.rec.out)-m.med;
+        rows+=`<tr><td>${s.name}</td><td>${slot}</td><td>${s.rec.out}</td><td>中央値${toHM(m.med)} / +${diff}分</td></tr>`;});});
+    title='退勤時間の中央値からの逸脱';
+    body=rows?`<table><thead><tr><th>氏名</th><th>枠</th><th>退勤</th><th>逸脱</th></tr></thead><tbody>${rows}</tbody></table>
+      <p class="muted" style="font-size:12px">同じ診療枠の退勤中央値より20分以上遅い人です。</p>`
+      :'<p class="muted">逸脱者はいません。</p>';
+  }
+  openListModal(title,body);
+}
+function renderAdmin(){
+  refreshAdminKpi();
+  renderAdminPane($('#adminTabs button.active').dataset.t);
+}
+/* 管理者：各人の勤務状況の確認・打刻修正・アイコン設定 */
+function setWorkPunch(code,date,field,val){
+  PUNCHLOG[code]=PUNCHLOG[code]||{};
+  const rec=PUNCHLOG[code][date]=PUNCHLOG[code][date]||{in:'',out:''};
+  const from=rec[field]||'';
+  if(from===val)return; // 変化なし
+  // 打刻原本を保持（最初の修正時にスナップショット）
+  if(!rec.orig)rec.orig={in:rec.in||'',out:rec.out||''};
+  rec[field]=val;
+  rec.edited=true;
+  rec.edits=rec.edits||[];
+  const entry={at:new Date().toISOString(),by:'管理者',field,from,to:val};
+  rec.edits.push(entry);
+  // 監査ログ（全体）
+  const s=STAFF.find(x=>x.id==code);
+  EDIT_LOG.unshift({at:entry.at,by:'管理者',code,name:(s?s.name:(CODE_NAME[code]||code)),date,field,from,to:val});
+  saveState();renderWorkPane(code);toast('打刻を修正しました（原本と履歴は保持／クラウド保存で反映）');
+}
+function revertWorkPunch(code,date){
+  const rec=(PUNCHLOG[code]||{})[date];if(!rec||!rec.orig)return;
+  EDIT_LOG.unshift({at:new Date().toISOString(),by:'管理者',code,name:(STAFF.find(x=>x.id==code)||{}).name||code,date,field:'原本へ戻す',from:`${rec.in||'—'}–${rec.out||'—'}`,to:`${rec.orig.in||'—'}–${rec.orig.out||'—'}`});
+  rec.in=rec.orig.in;rec.out=rec.orig.out;rec.edited=false;delete rec.orig;rec.edits=[];
+  saveState();renderWorkPane(code);toast('原本に戻しました');
+}
+function setWorkAvatar(code,key,val){
+  AVATAR_PREF[code]=AVATAR_PREF[code]||{};
+  AVATAR_PREF[code][key]=val;
+  saveAvatarPref();renderWorkPane(code);
+}
+function renderWorkPane(code){
+  const box=$('#workPane');if(!box)return;
+  const s=STAFF.find(x=>x.id==code);if(!s)return;
+  const log=PUNCHLOG[code]||{};const plan=SHIFTPLAN[code]||{};
+  const days=Object.keys(log).filter(d=>d.startsWith(DEMO_MONTH)).sort().reverse();
+  let tot=0;days.forEach(d=>{const n=netWork(log[d]);if(n)tot+=n;});
+  const todayRec=log[today];
+  const statusTxt=todayRec?(todayRec.out?'退勤済':'勤務中'):'未出勤';
+  const rem=paidRemain(code);
+  const remTxt=rem!=null?`${rem}日`:'—';
+  const remNote=rem!=null?`付与${paidGranted(code)}−取得${paidUsedTotal(code)}`:'シフト取込で表示';
+  const cur=AVATAR_PREF[code]||{};
+  box.innerHTML=`
+    <div class="kpi" style="margin-bottom:14px">
+      <div class="box"><div class="n">${statusTxt}</div><div class="l">本日の状態</div></div>
+      <div class="box"><div class="n">${tot?(tot/60).toFixed(1)+'h':'—'}</div><div class="l">${DEMO_MONTH} 実働</div></div>
+      <div class="box"><div class="n">${remTxt}</div><div class="l">有給残（${remNote}）</div></div>
+      <div class="box"><div class="n">${days.length}</div><div class="l">出勤日数</div></div>
+    </div>
+    <h2 style="font-size:14px;margin:0 0 6px">打刻履歴・修正（${DEMO_MONTH}）</h2>
+    <div style="overflow:auto"><table><thead><tr><th>日付</th><th>シフト</th><th>出勤</th><th>退勤</th><th>実働</th><th>判定</th><th>原本/修正</th></tr></thead>
+    <tbody>${days.length?days.map(d=>{const r=log[d];const sh=plan[d];const nw=netWork(r);
+      const v=[];if(sh&&r.in){const di=toMin(r.in)-toMin(sh.start);if(di>TOL)v.push(['遅刻+'+di+'分','late']);else if(di<-TOL)v.push(['早出'+di+'分','ok']);}
+      if(sh&&r.out){const dd=toMin(r.out)-toMin(sh.end);if(dd>TOL)v.push(['残業+'+dd+'分','over']);else if(dd<-TOL)v.push(['早退'+dd+'分','late']);}
+      if(nw!=null&&nw>480)v.push(['法定残業+'+(nw-480)+'分','over']);if(!v.length)v.push(['定時','ok']);
+      const origCell=r.edited?`<span class="pill late">修正済</span> <span class="muted" style="font-size:11px">原本 ${r.orig.in||'—'}–${r.orig.out||'—'} <button class="btn mini ghost" onclick="revertWorkPunch('${code}','${d}')">原本へ戻す</button></span>`:'<span class="muted" style="font-size:11px">原本</span>';
+      return `<tr><td>${d}</td><td>${sh?sh.start+'–'+sh.end:'—'}</td>
+        <td><input type="time" value="${r.in||''}" onchange="setWorkPunch('${code}','${d}','in',this.value)"></td>
+        <td><input type="time" value="${r.out||''}" onchange="setWorkPunch('${code}','${d}','out',this.value)"></td>
+        <td>${toHM(nw)}</td><td>${v.map(x=>`<span class="pill ${x[1]}">${x[0]}</span>`).join(' ')}</td>
+        <td>${origCell}</td></tr>`;
+    }).join(''):`<tr><td colspan="7" class="muted">${DEMO_MONTH} の打刻がありません。</td></tr>`}</tbody></table></div>
+    <div class="note">打刻ミスを直接訂正できます。<b>最初の打刻（原本）は消えず保持</b>され、いつ・誰が・何を変えたかは下の修正履歴に残ります。修正後は「シフトアプリからデータ取り込み」タブ下の「本人データをクラウドへ保存」でクラウド（＝本人スマホ）へ反映されます。</div>
+    ${(()=>{const es=EDIT_LOG.filter(e=>e.code==code);return es.length?`<h2 style="font-size:14px;margin:14px 0 6px">修正履歴（監査ログ）</h2>
+      <div style="overflow:auto;max-height:200px"><table style="font-size:12px"><thead><tr><th>日時</th><th>操作者</th><th>対象日</th><th>項目</th><th>前</th><th>後</th></tr></thead>
+      <tbody>${es.map(e=>`<tr><td>${new Date(e.at).toLocaleString('ja-JP')}</td><td>${e.by}</td><td>${e.date}</td><td>${e.field==='in'?'出勤':'退勤'}</td><td>${e.from||'—'}</td><td>${e.to||'—'}</td></tr>`).join('')}</tbody></table></div>`:'';})()}
+    <h2 style="font-size:14px;margin:14px 0 6px">打刻画面アイコン</h2>
+    <div class="row" style="align-items:center;gap:16px">
+      <div>${avatarHTML(s)}</div>
+      <div style="flex:1">
+        <div class="row" id="wkColors" style="gap:6px"></div>
+        <div class="row" id="wkIcons" style="gap:6px;margin-top:6px"></div>
+      </div>
+    </div>`;
+  $('#wkColors').innerHTML=PALETTE.map(c=>`<button onclick="setWorkAvatar('${code}','color','${c}')" title="色" style="width:26px;height:26px;border-radius:50%;border:2px solid #fff;box-shadow:0 0 0 1px #cbd5e1;background:${c};cursor:pointer;outline:${cur.color===c?'3px solid #0f172a':'none'}"></button>`).join('');
+  $('#wkIcons').innerHTML=ICON_CHOICES.map(ic=>`<button class="btn ghost mini" onclick="setWorkAvatar('${code}','icon','${ic}')">${ic==='initial'?'頭文字':ic}</button>`).join('');
+}
+function renderAdminPane(tab){
+  const p=$('#adminPane');
+  if(tab==='work'){
+    const opts=STAFF.map(s=>`<option value="${s.id}">${s.name}（${(LOCATIONS.find(l=>l.id===s.loc)||{}).short||''}）</option>`).join('');
+    p.innerHTML=`<div class="row" style="align-items:flex-end;margin-bottom:6px">
+        <label>スタッフ<br><select class="f" id="workStaff" style="min-width:260px">${opts}</select></label>
+      </div><div id="workPane"></div>`;
+    const sel=$('#workStaff');
+    sel.onchange=()=>renderWorkPane(sel.value);
+    renderWorkPane(sel.value);
+  }else if(tab==='diff'){
+    p.innerHTML=`<p class="muted" style="margin:0 0 8px">本日の打刻から自動計算した勤怠です（税理士CSVの該当列に対応）。夜診察＝割増対象時間帯 ${NIGHT_BAND?`<b>${NIGHT_BAND.s}–${NIGHT_BAND.e}</b>`:'<b>未設定</b>'}（「診察時間の設定」で変更）。</p>
+    <div style="overflow:auto"><table><thead><tr>
+      <th>名前</th><th>枠</th><th>シフト</th><th>実打刻</th>
+      <th style="text-align:right">実労働</th><th style="text-align:right">休憩(自動)</th>
+      <th style="text-align:right">法定残業</th><th style="text-align:right">（内訳）夜勤務</th><th style="text-align:right">実深夜</th>
+      <th>差異</th></tr></thead>
+    <tbody>${locStaff().map(s=>{
+      const cl=closureFor(s,today);
+      const noPunch=!(s.rec&&s.rec.in);
+      // 診療予定変更があり未打刻 → 無断欠勤ではなく事由を表示し、対象外
+      if(cl&&noPunch){return `<tr>
+        <td>${s.name}</td><td>${s.slot}</td><td>${s.shift.s}–${s.shift.e}</td>
+        <td>—</td><td colspan="5" style="text-align:center"><span class="pill closed">${cl.type}（集計対象外）</span></td>
+        <td><span class="pill closed">休診</span></td>
+      </tr>`;}
+      const c=calcDaily(s);const d=diffStatus(s);
+      const cell=(m,warn)=>`<td style="text-align:right${warn&&m>0?';color:#b91c1c;font-weight:700':''}">${m?toHM(m):'—'}</td>`;
+      return `<tr>
+      <td>${s.name}</td><td>${s.slot}</td><td>${s.shift.s}–${s.shift.e}</td>
+      <td>${s.rec?.in||'—'}–${s.rec?.out||'—'}</td>
+      ${cell(c&&c.net)}${cell(c&&c.brk)}${cell(c&&c.ot,true)}${cell(c&&c.night)}
+      <td style="text-align:right;color:#94a3b8">0:00</td>
+      <td>${d.tags.map(t=>`<span class="pill ${t.c}">${t.t}</span>`).join(' ')}</td>
+    </tr>`;}).join('')}</tbody></table></div>
+    <div class="note">実労働時間＝入退室−自動休憩（6h超45分/8h超60分）。法定残業＝実労働が1日8時間を超えた分（赤字）。夜診察＝「診察時間の設定」で決めた割増対象時間帯に働いた時間（金額は扱いません）。実深夜は当院では常に0です。診療カレンダーで休診の人は集計対象外（無断欠勤になりません）。</div>`;
+  }else if(tab==='appr'){
+    const ps=REQUESTS.filter(r=>r.status==='pending');
+    const corr=allCorrections().filter(c=>(c.status||'pending')==='pending');
+    p.innerHTML=`
+    <h2 style="font-size:14px;margin:0 0 6px">打刻修正の申告（スタッフのスマホから）</h2>
+    ${corr.length?`<table><thead><tr><th>氏名</th><th>コード</th><th>対象日</th><th>希望(出–退)</th><th>理由</th><th></th></tr></thead>
+      <tbody>${corr.map(c=>{const nm=c.staffName||(STAFF.find(s=>s.id==c.code)||{}).name||CODE_NAME[c.code]||'';
+        return `<tr><td>${nm}</td><td>${c.code}</td><td>${c.date}</td><td>${c.newIn||'—'}–${c.newOut||'—'}</td><td>${c.reason||''}${c.note?'（'+c.note+'）':''}</td>
+        <td class="row"><button class="btn mini g" onclick="decideCorrection('${c.unit}',${c.idx},'approved')">承認し反映</button>
+        <button class="btn mini r" onclick="decideCorrection('${c.unit}',${c.idx},'rejected')">却下</button></td></tr>`;}).join('')}</tbody></table>`
+      :`<p class="muted">未処理の打刻修正申告はありません。</p>`}
+    <div class="note">承認すると打刻に反映され（原本は保持・監査ログに記録）、結果はクラウド(requests_data)へ書き戻します。</div>
+    <h2 style="font-size:14px;margin:16px 0 6px">その他の申請</h2>
+    ${ps.length?`<table><thead><tr><th>種別</th><th>名前</th><th>日付</th><th>内容</th><th></th></tr></thead>
+      <tbody>${ps.map(r=>{const st=STAFF.find(s=>s.id==r.staff);return `<tr>
+        <td>${typeLabel(r.type)}</td><td>${st?st.name:''}</td><td>${r.date}</td><td>${r.detail}</td>
+        <td class="row"><button class="btn mini g" onclick="decide(${r.id},'approved')">承認</button>
+        <button class="btn mini r" onclick="decide(${r.id},'rejected')">却下</button></td>
+      </tr>`;}).join('')}</tbody></table>`
+      :`<p class="muted">未承認の申請はありません。</p>`}`;
+  }else if(tab==='median'){
+    const md=medianBySlot();
+    p.innerHTML=Object.keys(md).map(slot=>{
+      const m=md[slot];
+      return `<div style="margin-bottom:16px">
+        <h2 style="font-size:14px">${slot}：診察終了時刻（退勤の中央値）= <b>${toHM(m.med)}</b></h2>
+        <table><thead><tr><th>名前</th><th>退勤</th><th>中央値との差</th></tr></thead>
+        <tbody>${m.members.sort((a,b)=>toMin(a.rec.out)-toMin(b.rec.out)).map(s=>{
+          const diff=toMin(s.rec.out)-m.med;const isDev=diff>=20;
+          return `<tr><td>${s.name}</td><td>${s.rec.out}</td>
+          <td>${diff>0?'+':''}${diff}分 ${isDev?'<span class="pill dev">20分以上逸脱</span>':''}</td></tr>`;
+        }).join('')}</tbody></table></div>`;
+    }).join('')+`<div class="note">同じ診療枠の退勤中央値を「その日の診察終了時刻」とし、+20分以上の退勤を逸脱者として抽出します。</div>`;
+  }else if(tab==='point'){
+    p.innerHTML=`<p class="muted">定時どおりの出退勤は自動でポイント候補（+1）。残業を含む場合は「無駄な居残り」か「依頼した残業」か区別できないため、管理者が付与可否を判断します。</p>
+    <table><thead><tr><th>名前</th><th>判定</th><th>自動</th><th>管理者判断</th></tr></thead>
+    <tbody>${locStaff().map(s=>{const d=diffStatus(s);
+      const onTime=d.tags.every(t=>t.c==='ok');
+      const hasOver=d.tags.some(t=>t.t.startsWith('残業'));
+      return `<tr><td>${s.name}</td>
+        <td>${d.tags.map(t=>`<span class="pill ${t.c}">${t.t}</span>`).join(' ')}</td>
+        <td>${onTime?'<span class="pill ok">+1 自動</span>':hasOver?'<span class="pill late">保留（残業）</span>':'—'}</td>
+        <td>${hasOver?`<button class="btn mini g" onclick="toast('${s.name}：ポイント付与しました')">付与</button>
+          <button class="btn mini r" onclick="toast('${s.name}：付与なし')">なし</button>`:'<span class="muted">—</span>'}</td>
+      </tr>`;}).join('')}</tbody></table>`;
+  }else if(tab==='csv'){
+    const labels={'2026-05':'2026年5月','2026-01':'2026年1月'};
+    const rows = csvSource==='calc' ? aggregateMonthRows(DEMO_MONTH) : MONTHLY_ROWS;
+    const calcCols=new Set([3,5,6,7,8,9,10,12,14,17]); // 打刻から自動計算する列（強調）
+    p.innerHTML=`
+    <div class="row" style="align-items:flex-end;margin-bottom:8px">
+      <label>データ元<br><select class="f" id="srcSel">
+        <option value="calc" ${csvSource==='calc'?'selected':''}>打刻集計（当月 ${DEMO_MONTH}・自動）</option>
+        <option value="upload" ${csvSource==='upload'?'selected':''}>アップロード実績（過去月）</option>
+      </select></label>
+      ${csvSource==='upload'?`<label>対象月<br><select class="f" id="monthSel">${MONTH_KEYS.map(m=>`<option value="${m}" ${m===curMonth?'selected':''}>${labels[m]||m}</option>`).join('')}</select></label>`:''}
+      <button class="btn" id="csvMonthBtn" style="margin-left:auto">📤 税理士提出CSVを書き出し（全${rows.length}名）</button>
+    </div>
+    <div class="note">${csvSource==='calc'
+      ? `各スタッフの<b>1か月分の打刻ログ</b>（${DEMO_MONTH}）を集計し、税理士フォーマット18列に反映したものです。<b>実働日数・遅刻/早退回数・実労働時間・休憩時間・遅刻/早退時間・実残業時間・有休日数・夜診察勤務</b>を打刻から自動計算しています（強調列）。実シフト外労働・実深夜・月末有休残・有休時間は打刻からは算出せず空欄です。<br>※ デモのため当月の打刻は自動生成。iPad打刻すると当日分が上書き反映されます。`
+      : `アップロードいただいた実績CSVをそのまま表示・出力します（元ファイルとバイト一致）。`}</div>
+    <div style="overflow:auto;margin-top:10px;border:1px solid var(--line);border-radius:8px;max-height:520px">
+      <table style="font-size:11px">
+        <thead><tr>${CSV_HEADER.map((h,i)=>`<th style="white-space:nowrap;position:sticky;top:0;background:#f8fafc;${i<3?'':'text-align:right'}${csvSource==='calc'&&calcCols.has(i)?';color:#1d4ed8':''}">${h}</th>`).join('')}</tr></thead>
+        <tbody>${rows.map(r=>`<tr>${r.map((c,i)=>`<td style="white-space:nowrap;${i<3?'':'text-align:right'}${csvSource==='calc'&&calcCols.has(i)?';background:#eff6ff':''}">${c}</td>`).join('')}</tr>`).join('')}</tbody>
+      </table>
+    </div>`;
+    $('#srcSel').onchange=e=>{csvSource=e.target.value;renderAdmin();};
+    const ms=$('#monthSel');if(ms)ms.onchange=e=>setMonth(e.target.value);
+    $('#csvMonthBtn').onclick=exportMonthlyCSV;
+  }else if(tab==='shift'){
+    p.innerHTML=`<p class="muted">本日の予定シフトを編集できます（デモ）。</p>
+    <table><thead><tr><th>名前</th><th>診療枠</th><th>開始</th><th>終了</th></tr></thead>
+    <tbody>${locStaff().map(s=>`<tr><td>${s.name}</td>
+      <td><input class="f" value="${s.slot}" onchange="STAFF.find(x=>x.id=='${s.id}').slot=this.value;renderAdmin()" style="width:110px"></td>
+      <td><input type="time" value="${s.shift.s}" onchange="STAFF.find(x=>x.id=='${s.id}').shift.s=this.value;renderAdmin()"></td>
+      <td><input type="time" value="${s.shift.e}" onchange="STAFF.find(x=>x.id=='${s.id}').shift.e=this.value;renderAdmin()"></td>
+    </tr>`).join('')}</tbody></table>`;
+  }else if(tab==='cal'){
+    p.innerHTML=`<p class="muted">管理者専用。左の月カレンダーで休診の枠が確認できます。日付をタップすると右に診療枠×時間帯の詳細が表示され、その場で編集できます。休診になった枠の人は、その日に打刻がなくても<b>無断欠勤になりません</b>。</p>
+      <div class="cal-layout"><div class="cal-month" id="calMonth"></div><div class="cal-detail" id="calDetail"></div></div>`;
+    renderCalMonth();renderCalDetail();
+  }else if(tab==='import'){
+    const pw=localStorage.getItem('tc_shiftpw')||'';
+    p.innerHTML=`
+      <p class="muted">シフト管理アプリ（クラウド）から、ナース／クラーク／ドクターの予定シフトを取り込みます。スタッフコードで給与名簿と突合し、<b>asgn＋slots</b> から予定勤務時間を算出。これを基に欠勤回数・遅刻/早退・夜外来時間を自動判定します。</p>
+      <div class="row" style="align-items:flex-end">
+        <label>合言葉<br><input type="password" id="sbPw" value="${pw}" placeholder="シフトアプリと同じ" style="width:200px"></label>
+        <button class="btn" id="sbImport">☁ クラウドから取り込み</button>
+        <span class="muted">または</span>
+        <label class="btn ghost" style="cursor:pointer">📁 JSONファイルから取り込み<input type="file" id="fileImport" accept=".json,application/json" style="display:none"></label>
+      </div>
+      <div id="importResult" style="margin-top:14px">${importSummaryHTML()}</div>
+      <div class="note">クラウド取込が動かない場合（ブラウザのセキュリティ制限等）は、シフトアプリの「全データ保存」JSONを直接読み込めます。${IMPORT_INFO?'':'まだ取り込んでいません。'}</div>
+
+      <hr style="border:0;border-top:1px solid var(--line);margin:18px 0">
+      <h2 style="font-size:14px;margin:0 0 6px">本人データのクラウド保存（スマホ閲覧用）</h2>
+      <p class="muted" style="margin:0 0 10px">このタブレットの打刻・申請・アイコン・PINをクラウド（timecard_data）へ保存します。保存後、各スタッフは自分のスマホで「勤務状況の確認」をクラウド取得できます。</p>
+      <button class="btn" id="cloudPush">⬆ 本人データをクラウドへ保存</button>
+      <div class="note">合言葉は上のシフト取込と同じものを使います。保存先テーブル <code>timecard_data</code> はバックエンドでの作成が必要です（仕様書を別途お渡しします）。</div>`;
+    $('#cloudPush').onclick=async()=>{
+      let pwv=$('#sbPw').value||localStorage.getItem('tc_shiftpw');
+      if(!pwv){toast('合言葉を入力してください');return;}
+      localStorage.setItem('tc_shiftpw',pwv);
+      const btn=$('#cloudPush');btn.textContent='保存中…';btn.disabled=true;
+      try{await pushCloud(pwv);toast('クラウドへ保存しました');btn.textContent='⬆ 本人データをクラウドへ保存';btn.disabled=false;}
+      catch(e){toast('保存失敗: '+e.message);btn.textContent='⬆ 本人データをクラウドへ保存';btn.disabled=false;}
+    };
+    $('#sbImport').onclick=async()=>{
+      const pwv=$('#sbPw').value;localStorage.setItem('tc_shiftpw',pwv);
+      const btn=$('#sbImport');btn.textContent='取り込み中…';btn.disabled=true;
+      try{const{ym}=await cloudImport(pwv);renderAdmin();toast(`シフト取り込み完了（${ym||'—'}）`);}
+      catch(e){toast('取込失敗: '+e.message);btn.textContent='☁ クラウドから取り込み';btn.disabled=false;}
+    };
+    $('#fileImport').onchange=ev=>{
+      const f=ev.target.files[0];if(!f)return;const rd=new FileReader();
+      rd.onload=()=>{try{const j=JSON.parse(rd.result);
+        const wrapped=(j.clerk||j.nurse||j.doctor)?j:{nurse:j,clerk:null,doctor:null};
+        const{ym}=parseImport(wrapped);renderAdmin();toast(`ファイル取り込み完了（${ym||'—'}）`);
+      }catch(err){toast('JSON解析に失敗: '+err.message);}};
+      rd.readAsText(f);
+    };
+  }else if(tab==='hours'){
+    const nb=NIGHT_BAND||{s:'18:00',e:'20:00'};
+    const slotRows=Object.keys(SLOTLIB).length
+      ? Object.entries(SLOTLIB).map(([id,v])=>`<tr><td>${id}</td><td>${v.label||''}</td><td>${v.s||v.time||''}–${v.e||''}</td><td>${v.type==='surg'?'手術':'外来'}</td></tr>`).join('')
+      : `<tr><td colspan="4" class="muted">未取込。「シフトアプリからデータ取り込み」を実行すると診療枠が入ります。</td></tr>`;
+    p.innerHTML=`
+    <div class="card" style="background:var(--soft);border:0;margin-bottom:16px">
+      <h2 style="font-size:14px;margin:0 0 8px">割増（夜診察）時間帯</h2>
+      <p class="muted" style="margin:0 0 8px">この時間帯に働いた分を「夜診察勤務（割増対象）」として集計します。<b>金額は扱いません</b>（時給・割増額は給与側で計算）。</p>
+      <div class="row" style="align-items:flex-end">
+        <label>開始<br><input type="time" id="nbStart" value="${nb.s}"></label>
+        <label>終了<br><input type="time" id="nbEnd" value="${nb.e}"></label>
+        <button class="btn" id="nbSave">保存</button>
+        <span class="muted">例：18:00〜20:00 を割増対象にする。</span>
+      </div>
+    </div>
+    <h2 style="font-size:14px;margin:0 0 6px">取り込んだ診療枠（シフトアプリ由来・参考）</h2>
+    <table><thead><tr><th>枠ID</th><th>名称</th><th>時間</th><th>種別</th></tr></thead><tbody>${slotRows}</tbody></table>
+    <div class="note">診療枠の名称・時間は<b>シフト管理アプリで設定</b>し、取り込みで反映されます（ここでは編集せず参照のみ）。割増の対象時間帯だけ上で設定してください。曜日ごとに割増を変えたい等あれば拡張できます。</div>`;
+    $('#nbSave').onclick=()=>{
+      const s=$('#nbStart').value, e=$('#nbEnd').value;
+      if(!s||!e){toast('開始・終了を入力してください');return;}
+      NIGHT_BAND={s,e};saveState();toast('割増時間帯を保存しました');renderAdmin();
+    };
+  }else if(tab==='staffset'){
+    p.innerHTML=`
+    <div class="card" style="background:var(--soft);border:0;margin-bottom:16px">
+      <h2 style="font-size:14px;margin:0 0 8px">管理者設定</h2>
+      <div class="row" style="align-items:flex-end">
+        <label>管理者パスワード（変更）<br><input type="text" id="adminPwField" placeholder="新しいパスワード" style="width:160px"></label>
+        <button class="btn" id="adminPwBtn">変更を保存</button>
+        <span class="muted">この画面（管理者）に入るためのパスワード。初期値は 0000。共有タブレットなので必ず変更してください。</span>
+      </div>
+    </div>
+    <div class="card" style="background:var(--soft);border:0;margin-bottom:16px">
+      <div class="row" style="align-items:center">
+        <h2 style="font-size:14px;margin:0">打刻画面に表示するスタッフ</h2>
+        <span class="muted" id="showCount" style="margin-left:auto"></span>
+      </div>
+      <p class="muted" style="margin:6px 0 10px">チェックを外した人は、トップページ（iPad打刻画面）に表示されません。退職・休職中の方などを非表示にできます。打刻データや過去の集計は消えません（表示の切り替えのみ）。</p>
+      <div class="row" style="gap:8px;margin-bottom:10px">
+        <button class="btn ghost mini" id="showAllBtn">全員を表示</button>
+      </div>
+      <div id="showList" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:6px"></div>
+    </div>
+    <p class="muted">勤務開始日（入社日）と希望就業時間（月）を登録します。勤務開始日から有給の法定付与日数が計算されます。</p>
+    <table><thead><tr><th>名前</th><th>勤務開始日</th><th>勤続</th><th>法定付与</th><th>希望就業(月h)</th></tr></thead>
+    <tbody>${locStaff().map(s=>{
+      const yrs=((new Date(today)-new Date(s.hire))/(1000*60*60*24*365)).toFixed(1);
+      return `<tr><td>${s.name}</td>
+      <td><input type="date" value="${s.hire}" onchange="setHire('${s.id}',this.value)"></td>
+      <td>${yrs}年</td>
+      <td id="lv-${s.id}"><b>${statutoryLeave(s.hire)}日</b></td>
+      <td><input type="number" min="0" style="width:90px" value="${s.desired||''}" onchange="setDesired('${s.id}',this.value)"></td>
+    </tr>`;}).join('')}</tbody></table>
+    <div class="note">法定付与は勤続6ヶ月で10日、以降1年ごとに加算（最大20日）。比例付与など細則は就業規則に合わせて設定します。</div>`;
+    $('#adminPwBtn').onclick=()=>{const v=$('#adminPwField').value.trim();if(!v){toast('新しいパスワードを入力してください');return;}ADMIN_PW=v;try{localStorage.setItem('tc_adminpw',v);}catch(e){}$('#adminPwField').value='';toast('管理者パスワードを変更しました');};
+    renderShowList();
+  }
+}
+// スタッフ設定：打刻画面に表示するスタッフのチェックリスト
+function renderShowList(){
+  const box=$('#showList'); if(!box)return;
+  const list=locStaff();
+  box.innerHTML=list.map(s=>`<label style="display:flex;align-items:center;gap:8px;padding:6px 8px;background:#fff;border:1px solid var(--line);border-radius:8px;font-size:13px${isHidden(s.id)?';opacity:.55':''}">
+    <input type="checkbox" ${isHidden(s.id)?'':'checked'} onchange="setHidden('${s.id}',!this.checked)">
+    <span>${s.name}</span>${isHidden(s.id)?'<span class="muted" style="margin-left:auto;font-size:11px">非表示</span>':''}</label>`).join('');
+  const shown=list.filter(s=>!isHidden(s.id)).length;
+  const cnt=$('#showCount'); if(cnt)cnt.textContent=`表示 ${shown} / 全 ${list.length} 名`;
+  const all=$('#showAllBtn'); if(all)all.onclick=()=>{locStaff().forEach(s=>delete HIDDEN[s.id]);saveState();renderIpad();renderAdmin();};
+}
+/* ===== 診療カレンダー（月グリッド＋詳細） ===== */
+let calY=Number(today.slice(0,4)), calM=Number(today.slice(5,7)); // 表示中の年・月
+let selDate=today; // 選択中の日付
+function ymd(y,m,d){return `${y}-${String(m).padStart(2,'0')}-${String(d).padStart(2,'0')}`;}
+function calShift(delta){calM+=delta;if(calM<1){calM=12;calY--;}if(calM>12){calM=1;calY++;}renderCalMonth();}
+function renderCalMonth(){
+  const wrap=$('#calMonth');if(!wrap)return;
+  const first=new Date(calY,calM-1,1), startDow=first.getDay();
+  const daysInMonth=new Date(calY,calM,0).getDate();
+  const dow=['日','月','火','水','木','金','土'];
+  let cells='';
+  // 前月の空白
+  for(let i=0;i<startDow;i++)cells+=`<div class="cal-cell out"></div>`;
+  for(let d=1;d<=daysInMonth;d++){
+    const date=ymd(calY,calM,d);
+    const cls=closedCells(date);
+    const has=(DAYSLOTS[date]||[]).length;
+    let marks='';
+    cls.slice(0,3).forEach(c=>{marks+=`<span class="mk">${c.label} 休診</span>`;});
+    if(cls.length>3)marks+=`<span class="mk">+${cls.length-3}</span>`;
+    if(!cls.length&&has)marks+=`<span class="mk doc">診療日</span>`;
+    cells+=`<div class="cal-cell${date===today?' today':''}${date===selDate?' sel':''}" onclick="selectCalDate('${date}')">
+      <span class="dnum">${d}</span>${marks}</div>`;
+  }
+  wrap.innerHTML=`
+    <div class="cal-head">
+      <button class="cal-nav" onclick="calShift(-1)">‹</button>
+      <button class="cal-nav" onclick="calShift(1)">›</button>
+      <span class="mtitle">${calM}<small>${calY}年 / ${LOCATIONS.find(l=>l.id===curLoc).name}</small></span>
+    </div>
+    <div class="cal-grid">
+      ${dow.map((d,i)=>`<div class="dow${i===0?' sun':i===6?' sat':''}">${d}</div>`).join('')}
+      ${cells}
+    </div>`;
+}
+function selectCalDate(date){selDate=date;renderCalMonth();renderCalDetail();}
+function renderCalDetail(){
+  const box=$('#calDetail');if(!box)return;
+  const dt=new Date(selDate+'T00:00');
+  const dows=['日','月','火','水','木','金','土'];
+  const list=DAYSLOTS[selDate]||[];
+  const rows=list.map(sl=>{
+    const c=isCancelled(selDate,sl.id);
+    const tm=(sl.s||'')+(sl.e?'–'+sl.e:'');
+    const lab=(sl.label||sl.id)+(sl.type==='surg'?'（手術）':'');
+    return `<tr><td>${lab}</td><td>${tm}</td><td><button class="btn mini ${c?'r':'g'}" onclick="toggleCancel('${selDate}','${sl.id}')">${c?'休診（戻す）':'診療あり'}</button></td></tr>`;
+  }).join('');
+  box.innerHTML=`
+    <h2 style="font-size:20px;margin:0 0 10px">${dt.getMonth()+1}月${dt.getDate()}日（${dows[dt.getDay()]}）</h2>
+    ${list.length?`<table class="sch-table"><colgroup><col style="width:auto"><col style="width:110px"><col style="width:120px"></colgroup><thead><tr><th style="width:auto">診療枠</th><th>時間</th><th>状態</th></tr></thead><tbody>${rows}</tbody></table>
+    <div class="note">診療枠の名称・時間は<b>シフトアプリの設定をそのまま</b>使っています。OPキャンセル等で休診にする枠は「診療あり」を押して「休診」に切り替えてください。担当枠が全て休診の人は、その日に打刻が無くても無断欠勤になりません。</div>`
+    :`<p class="muted">この日は診療枠がありません（休診日／シフト未割当）。シフト取り込み後に表示されます。</p>`}`;
+}
+function setHire(id,v){const s=STAFF.find(x=>x.id==id);if(!s)return;s.hire=v;STAFF_META[id]=STAFF_META[id]||{};STAFF_META[id].hire=v;saveState();const c=$('#lv-'+id);if(c)c.innerHTML=`<b>${statutoryLeave(v)}日</b>`;toast('勤務開始日を保存しました');}
+function setDesired(id,v){const s=STAFF.find(x=>x.id==id);if(!s)return;s.desired=+v;STAFF_META[id]=STAFF_META[id]||{};STAFF_META[id].desired=+v;saveState();toast('希望就業時間を保存しました');}
+function decide(id,status){
+  const r=REQUESTS.find(x=>x.id==id);if(!r)return;
+  r.status=status;
+  // 打刻修正が承認されたら実際の打刻に反映
+  if(status==='approved'&&r.type==='correction'){
+    const st=STAFF.find(x=>x.id==r.staff);
+    if(st){st.rec=st.rec||{in:null,out:null};
+      if(r.newIn)st.rec.in=r.newIn;
+      if(r.newOut)st.rec.out=r.newOut;
+      st.rec.edited=true;
+    }
+  }
+  saveState();renderAdmin();
+  toast(status==='approved'?(r.type==='correction'?'承認し打刻に反映しました':'承認しました'):'却下しました');
+}
+// 打刻修正申告を打刻へ反映（原本保持・監査ログ）
+function applyCorrectionToPunch(c){
+  const code=c.code, date=c.date; if(!code||!date)return;
+  PUNCHLOG[code]=PUNCHLOG[code]||{};
+  const rec=PUNCHLOG[code][date]=PUNCHLOG[code][date]||{in:'',out:''};
+  if(!rec.orig)rec.orig={in:rec.in||'',out:rec.out||''};
+  const fromIn=rec.in||'', fromOut=rec.out||'';
+  if(c.newIn)rec.in=c.newIn;
+  if(c.newOut)rec.out=c.newOut;
+  rec.edited=true; rec.edits=rec.edits||[];
+  const at=new Date().toISOString();
+  rec.edits.push({at,by:'本人申告→管理者承認',field:'in/out',from:fromIn+'–'+fromOut,to:(rec.in||'')+'–'+(rec.out||'')});
+  EDIT_LOG.unshift({at,by:'本人申告→承認',code,name:(STAFF.find(x=>x.id==code)||{}).name||CODE_NAME[code]||code,date,field:'打刻修正(申告)',from:fromIn+'–'+fromOut,to:(rec.in||'')+'–'+(rec.out||'')});
+}
+// 打刻修正申告の承認/却下（requests_dataのstatus更新＋打刻反映＋クラウド書き戻し）
+async function decideCorrection(unit,idx,status){
+  const w=REQ_DATA[unit]; if(!w||!w.timecardCorrections||!w.timecardCorrections[idx])return;
+  const c=w.timecardCorrections[idx];
+  if(status==='approved')applyCorrectionToPunch(c);
+  c.status=status; c.decidedAt=new Date().toISOString();
+  saveState();renderAdmin();
+  const pw=localStorage.getItem('tc_shiftpw');
+  if(pw){
+    try{
+      await pushRequestsData(await sbLogin(pw));     // 申告のstatusを書き戻し（wrapper保持）
+      if(status==='approved')await pushCloud(pw);     // 打刻をtimecard_dataへ反映
+      toast(status==='approved'?'承認し打刻へ反映＋クラウド更新しました':'却下しクラウド更新しました');
+    }catch(e){toast('クラウド更新に一部失敗: '+e.message);}
+  }else{
+    toast(status==='approved'?'承認し打刻へ反映（ローカル）。合言葉設定後にクラウド反映されます':'却下（ローカル）');
+  }
+}
+function exportCSV(){
+  const rows=[['拠点','日付','氏名','診療枠','出勤','退勤','実働(分)',...(WAGE_BANDS[curLoc]||[]).map(b=>`${b.label}(分)`)]];
+  locStaff().forEach(s=>{const bs=bandSplit(s.rec,curLoc);
+    rows.push([LOCATIONS.find(l=>l.id===curLoc).name,today,s.name,s.slot,s.rec?.in||'',s.rec?.out||'',netWork(s.rec)??'',...Object.values(bs)]);
+  });
+  const csv='﻿'+rows.map(r=>r.join(',')).join('\n');
+  const blob=new Blob([csv],{type:'text/csv'});const url=URL.createObjectURL(blob);
+  const a=document.createElement('a');a.href=url;a.download=`勤怠明細_${curLoc}_${today}.csv`;a.click();URL.revokeObjectURL(url);
+  toast('日別明細CSVを書き出しました');
+}
+function downloadCSV(rows,name){
+  const csv='﻿'+rows.map(r=>r.join(',')).join('\n');
+  const blob=new Blob([csv],{type:'text/csv'});const url=URL.createObjectURL(blob);
+  const a=document.createElement('a');a.href=url;a.download=name;a.click();URL.revokeObjectURL(url);
+}
+// 税理士事務所提出CSV（実フォーマット18列・全クリニック・BOM付きUTF-8・CRLF）
+function csvCell(v){v=(v==null)?'':String(v);return /[",\r\n]/.test(v)?'"'+v.replace(/"/g,'""')+'"':v;}
+function writeCSVFile(dataRows,name){
+  const rows=[CSV_HEADER, ...dataRows];
+  const csv='﻿'+rows.map(r=>r.map(csvCell).join(',')).join('\r\n')+'\r\n';
+  const blob=new Blob([csv],{type:'text/csv;charset=utf-8'});const url=URL.createObjectURL(blob);
+  const a=document.createElement('a');a.href=url;a.download=name;a.click();URL.revokeObjectURL(url);
+}
+function exportMonthlyCSV(){
+  if(csvSource==='calc'){
+    writeCSVFile(aggregateMonthRows(DEMO_MONTH),`勤務データ_打刻集計_${DEMO_MONTH}.csv`);
+    toast(`打刻集計CSV（${DEMO_MONTH}・全${STAFF.length}名）を書き出しました`);return;
+  }
+  writeCSVFile(MONTHLY_ROWS,`勤務データ_${curMonth}.csv`);
+  toast(`提出CSV（全${MONTHLY_ROWS.length}名）を書き出しました`);
+}
+
+/* ============ 共通：切替・初期化 ============ */
+function setRole(r){
+  // 管理者はパスワードで保護（離脱時に再ロック）
+  if(r==='admin'&&!adminAuthed){
+    const pw=prompt('管理者パスワードを入力してください');
+    if(pw===null)return;                 // キャンセル → 移動しない
+    if(pw!==ADMIN_PW){toast('パスワードが違います');return;}
+    adminAuthed=true;
+  }
+  if(r!=='admin')adminAuthed=false;       // 管理者画面を離れたら再ロック
+  curRole=r;
+  if(r!=='staff')staffAuthed=null; // スタッフ画面を離れたら必ずログアウト
+  $$('.roles button').forEach(b=>b.classList.toggle('active',b.dataset.role===r));
+  $$('.view').forEach(v=>v.classList.remove('active'));
+  $('#view-'+r).classList.add('active');
+  if(r==='ipad')renderIpad();
+  if(r==='staff'){fillStaffSelect();renderStaff();}
+  if(r==='admin'){renderAdmin();autoCloudRefresh();}
+}
+// 管理者画面に入ったら、合言葉があれば自動でクラウド取り込み（常に最新表示）
+let _autoRefreshing=false;
+function autoCloudRefresh(){
+  const pw=localStorage.getItem('tc_shiftpw');
+  if(!pw||_autoRefreshing)return;
+  _autoRefreshing=true;
+  toast('最新データをクラウドから取得中…');
+  cloudImport(pw)
+    .then(()=>{ if(curRole==='admin')renderAdmin(); toast('最新に更新しました'); })
+    .catch(e=>{ toast('クラウド取得に失敗（ローカル表示のまま）: '+e.message); })
+    .finally(()=>{ _autoRefreshing=false; });
+}
+$$('.roles button').forEach(b=>b.onclick=()=>setRole(b.dataset.role));
+$('#brandLogo').onclick=()=>setRole('ipad');
+// 本人ページ：ログイン／ログアウト
+$('#loginBtn').onclick=async()=>{
+  const code=$('#loginStaff').value, pin=$('#loginPin').value.trim();
+  const useCloud=$('#loginCloud')&&$('#loginCloud').checked;
+  const msg=$('#loginMsg');msg.textContent='';
+  if(useCloud){
+    let pw=localStorage.getItem('tc_shiftpw');
+    if(!pw){pw=prompt('クラウドの合言葉を入力してください');if(pw)localStorage.setItem('tc_shiftpw',pw);else return;}
+    const btn=$('#loginBtn');btn.textContent='確認中…';btn.disabled=true;
+    try{
+      const rec=await pullCloudStaff(pw,code);
+      if(!rec){msg.textContent='クラウドにあなたのデータがありません（先に共有タブレットで保存してください）';btn.textContent='確認する';btn.disabled=false;return;}
+      if(!rec.pin){msg.textContent='この方のPINが未設定です。シフトアプリでPIN設定→タブレットで再取込→クラウドへ保存してください。';btn.textContent='確認する';btn.disabled=false;return;}
+      if(String(pin)!==String(rec.pin)){msg.textContent='PINが違います。';btn.textContent='確認する';btn.disabled=false;return;}
+      applyCloudStaff(code,rec);staffAuthed=code;
+      $$('#staffTabs button').forEach((x,i)=>x.classList.toggle('active',i===0));
+      btn.textContent='確認する';btn.disabled=false;renderStaff();
+    }catch(e){msg.textContent='取得失敗: '+e.message;btn.textContent='確認する';btn.disabled=false;}
+    return;
+  }
+  if(verifyStaffPin(code,pin)){staffAuthed=code;
+    $$('#staffTabs button').forEach((x,i)=>x.classList.toggle('active',i===0));
+    renderStaff();}
+  else{msg.textContent='PINが違います。シフトアプリで設定したPINをご確認ください。';}
+};
+$('#loginPin').addEventListener('keydown',e=>{if(e.key==='Enter')$('#loginBtn').click();});
+$('#logoutBtn').onclick=staffLogout;
+$$('#staffTabs button').forEach(b=>b.onclick=()=>{$$('#staffTabs button').forEach(x=>x.classList.remove('active'));b.classList.add('active');renderStaff();});
+$$('#adminTabs button').forEach(b=>b.onclick=()=>{$$('#adminTabs button').forEach(x=>x.classList.remove('active'));b.classList.add('active');renderAdmin();});
+
+function fillLoc(){const sel=$('#locSel');LOCATIONS.forEach(l=>{const o=document.createElement('option');o.value=l.id;o.textContent=l.short||l.name;sel.appendChild(o);});sel.value=curLoc;}
+$('#locSel').onchange=e=>{curLoc=e.target.value;setRole(curRole);};
+
+function tickClock(){const d=new Date();$('#clock').textContent=d.toLocaleString('ja-JP',{month:'2-digit',day:'2-digit',weekday:'short',hour:'2-digit',minute:'2-digit',second:'2-digit'});}
+setInterval(tickClock,1000);tickClock();
+
+loadState();fillLoc();setRole('ipad');
+</script>
+</body>
+</html>
