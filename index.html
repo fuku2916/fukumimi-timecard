@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>クリニック タイムカード V33</title>
+<title>クリニック タイムカード V34</title>
 <style>
   :root{
     --bg:#10402c; --panel:#ffffff; --ink:#1f2a24; --muted:#6b7c72;
@@ -150,7 +150,7 @@
 <header class="app">
   <h1>
     <span class="brandlogo" id="brandLogo" title="iPad打刻画面に戻る"><span class="mark">🏥</span><span class="org">福耳会</span></span>
-    <span class="apptitle">クリニック タイムカード<span class="ver">V33</span></span>
+    <span class="apptitle">クリニック タイムカード<span class="ver">V34</span></span>
   </h1>
   <div class="roles">
     <button data-role="ipad" class="active">iPad打刻</button>
@@ -878,13 +878,12 @@ function stepMarbles(dt){
   MARBLES.forEach(m=>{
     if(m.dragging)return;
     if(m.working){
-      // 風船：ゆっくり優雅に上昇＋そよ風でゆらゆら
-      const riseV=-58;                                   // 上昇のターミナル速度（小さい＝ゆっくり）
-      m.vy += (riseV - m.vy)*Math.min(1,dt*0.9);         // ゆっくり目標速度へ寄せる
+      // 風船：高粘度の液体の中を泡が上がるように、ゆっくり“でも確実に”上昇
+      m.vy += -900*dt;                                    // 常時しっかりした浮力（衝突で押されても沈まない）
+      m.vy *= 0.90;                                       // 強い粘性抵抗 → ゆっくり一定速度へ収束（ふわふわ）
       const breeze=Math.sin(t*0.7+m.phase)*22+Math.sin(t*1.7+m.phase*1.7)*8; // 風のゆらぎ（横加速度）
-      m.vx += breeze*dt - tiltGX*G*0.35*dt;              // 風船は浮力なので傾けた向きと逆（上側）へ流れる
-      m.vx *= 0.94;                                       // 横はやわらかく減衰
-      m.vy *= 0.985;
+      m.vx += breeze*dt - tiltGX*G*0.30*dt;              // 風船は浮力なので傾けた向きと逆（上側）へ流れる
+      m.vx *= 0.93;                                       // 横はやわらかく減衰
     }else{
       // 未出勤・退勤済：ビー玉として下に転がる
       m.vy += G*dt; m.vx += tiltGX*G*dt;
@@ -900,6 +899,12 @@ function stepMarbles(dt){
       if(!a.dragging){a.x-=nx*push;a.y-=ny*push;} if(!b.dragging){b.x+=nx*push;b.y+=ny*push;}
       const rvx=b.vx-a.vx, rvy=b.vy-a.vy, vn=rvx*nx+rvy*ny;
       if(vn<0){ const imp=-1.4*vn/2; a.vx-=imp*nx;a.vy-=imp*ny; b.vx+=imp*nx;b.vy+=imp*ny; }
+      // 風船とボールが接触したら、風船は上・ボールは下へ余分に分離（泡が抜けるように。下に埋もれて沈むのを防ぐ）
+      if(a.working!==b.working){
+        const bl=a.working?a:b, ba=a.working?b:a, extra=ov*0.7;
+        if(!bl.dragging){bl.y-=extra; bl.vy-=120;}
+        if(!ba.dragging){ba.y+=extra;}
+      }
     }
   }
 }
