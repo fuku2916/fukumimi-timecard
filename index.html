@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>クリニック タイムカード V39</title>
+<title>クリニック タイムカード V40</title>
 <style>
   :root{
     --bg:#10402c; --panel:#ffffff; --ink:#1f2a24; --muted:#6b7c72;
@@ -151,7 +151,7 @@
 <header class="app">
   <h1>
     <span class="brandlogo" id="brandLogo" title="iPad打刻画面に戻る"><span class="mark">🏥</span><span class="org">福耳会</span></span>
-    <span class="apptitle">クリニック タイムカード<span class="ver">V39</span></span>
+    <span class="apptitle">クリニック タイムカード<span class="ver">V40</span></span>
   </h1>
   <div class="roles">
     <button data-role="ipad" class="active">iPad打刻</button>
@@ -324,6 +324,8 @@ function avatarHTML(s,extra=''){
    DAYSLOTS[日付] = [{id,label,s,e,type}]（その日に診療がある枠：取り込んだasgn＋slots由来）
    CANCELLED[日付] = {slotId:true}（管理者がOPキャンセル等で休診にした枠） */
 let DAYSLOTS={};
+let SLOT_STAFF={};   // date -> slotId -> [code,...]（その枠に割り当てられた人）
+let CODE_UNIT={};    // code -> 'nurse'|'clerk'|'doctor'
 let CANCELLED={};
 function isCancelled(date,slotId){return !!(CANCELLED[date]&&CANCELLED[date][slotId]);}
 function toggleCancel(date,slotId){
@@ -333,16 +335,24 @@ function toggleCancel(date,slotId){
 }
 // 取り込んだ予定(SHIFTPLAN)から、日付ごとの診療枠リストを構築
 function buildDaySlots(){
-  DAYSLOTS={};
+  DAYSLOTS={}; SLOT_STAFF={}; CODE_UNIT={};
+  (IMPORT_STAFF||[]).forEach(s=>{if(s.unit)CODE_UNIT[s.id]=s.unit;}); // code→職種
   Object.keys(SHIFTPLAN).forEach(code=>{
     Object.entries(SHIFTPLAN[code]).forEach(([date,sh])=>{
       (sh.slots||[]).forEach(id=>{
         DAYSLOTS[date]=DAYSLOTS[date]||{};
         if(!DAYSLOTS[date][id]){const t=SLOTLIB[id]||{};DAYSLOTS[date][id]={id,label:t.label||id,s:t.s||'',e:t.e||'',type:t.type||''};}
+        SLOT_STAFF[date]=SLOT_STAFF[date]||{}; (SLOT_STAFF[date][id]=SLOT_STAFF[date][id]||[]).push(code); // 割り当て記録
       });
     });
   });
   Object.keys(DAYSLOTS).forEach(d=>{DAYSLOTS[d]=Object.values(DAYSLOTS[d]).sort((a,b)=>(a.s||'').localeCompare(b.s||''));});
+}
+function staffNameByCode(code){const s=(IMPORT_STAFF||[]).find(x=>x.id===code);return (s&&s.name)||CODE_NAME[code]||code;}
+// その日・その枠の担当医師名（職種=doctor）
+function doctorsFor(date,slotId){
+  const codes=(SLOT_STAFF[date]&&SLOT_STAFF[date][slotId])||[];
+  return codes.filter(c=>CODE_UNIT[c]==='doctor').map(staffNameByCode);
 }
 // その日の休診枠ラベル一覧（カレンダー表示用）
 function closedCells(date){
@@ -375,7 +385,7 @@ let REQ_DATA={}; // requests_data.data 生データ（unit毎 {requests,avatars,
 function saveState(){
   try{
     const recs={};STAFF.forEach(s=>{if(s.rec)recs[s.id]=s.rec;});
-    localStorage.setItem('tc_state',JSON.stringify({requests:REQUESTS,recs,dayslots:DAYSLOTS,cancelled:CANCELLED,meta:STAFF_META,hidden:HIDDEN,phys:PHYS,importStaff:IMPORT_STAFF,punchlog:PUNCHLOG,shiftplan:SHIFTPLAN,leaveplan:LEAVEPLAN,nightBand:NIGHT_BAND,slotlib:SLOTLIB,demoMonth:DEMO_MONTH,importInfo:IMPORT_INFO,staffPin:STAFF_PIN,codeName:CODE_NAME,paid:PAID,editLog:EDIT_LOG,reqData:REQ_DATA}));
+    localStorage.setItem('tc_state',JSON.stringify({requests:REQUESTS,recs,dayslots:DAYSLOTS,slotstaff:SLOT_STAFF,codeunit:CODE_UNIT,cancelled:CANCELLED,meta:STAFF_META,hidden:HIDDEN,phys:PHYS,importStaff:IMPORT_STAFF,punchlog:PUNCHLOG,shiftplan:SHIFTPLAN,leaveplan:LEAVEPLAN,nightBand:NIGHT_BAND,slotlib:SLOTLIB,demoMonth:DEMO_MONTH,importInfo:IMPORT_INFO,staffPin:STAFF_PIN,codeName:CODE_NAME,paid:PAID,editLog:EDIT_LOG,reqData:REQ_DATA}));
   }catch(e){}
 }
 function loadState(){
@@ -385,6 +395,8 @@ function loadState(){
     if(Array.isArray(st.requests))REQUESTS=st.requests;
     if(st.recs)STAFF.forEach(s=>{if(st.recs[s.id])s.rec=st.recs[s.id];});
     if(st.dayslots)DAYSLOTS=st.dayslots;
+    if(st.slotstaff)SLOT_STAFF=st.slotstaff;
+    if(st.codeunit)CODE_UNIT=st.codeunit;
     if(st.cancelled)CANCELLED=st.cancelled;
     if(st.meta)STAFF_META=st.meta;
     if(st.hidden)HIDDEN=st.hidden;
@@ -1621,12 +1633,14 @@ function renderCalDetail(){
     const c=isCancelled(selDate,sl.id);
     const tm=(sl.s||'')+(sl.e?'–'+sl.e:'');
     const lab=(sl.label||sl.id)+(sl.type==='surg'?'（手術）':'');
-    return `<tr><td>${lab}</td><td>${tm}</td><td><button class="btn mini ${c?'r':'g'}" onclick="toggleCancel('${selDate}','${sl.id}')">${c?'休診（戻す）':'診療あり'}</button></td></tr>`;
+    const docs=doctorsFor(selDate,sl.id);
+    const docCell=docs.length?docs.join('、'):'<span class="muted">—</span>';
+    return `<tr><td>${lab}</td><td>${tm}</td><td>${docCell}</td><td><button class="btn mini ${c?'r':'g'}" onclick="toggleCancel('${selDate}','${sl.id}')">${c?'休診（戻す）':'診療あり'}</button></td></tr>`;
   }).join('');
   box.innerHTML=`
     <h2 style="font-size:20px;margin:0 0 10px">${dt.getMonth()+1}月${dt.getDate()}日（${dows[dt.getDay()]}）</h2>
-    ${list.length?`<table class="sch-table"><colgroup><col style="width:auto"><col style="width:110px"><col style="width:120px"></colgroup><thead><tr><th style="width:auto">診療枠</th><th>時間</th><th>状態</th></tr></thead><tbody>${rows}</tbody></table>
-    <div class="note">診療枠の名称・時間は<b>シフトアプリの設定をそのまま</b>使っています。OPキャンセル等で休診にする枠は「診療あり」を押して「休診」に切り替えてください。担当枠が全て休診の人は、その日に打刻が無くても無断欠勤になりません。</div>`
+    ${list.length?`<table class="sch-table"><colgroup><col style="width:auto"><col style="width:96px"><col style="width:150px"><col style="width:110px"></colgroup><thead><tr><th style="width:auto">診療枠</th><th>時間</th><th>担当医師</th><th>状態</th></tr></thead><tbody>${rows}</tbody></table>
+    <div class="note">診療枠の名称・時間・担当医師は<b>シフトアプリの設定をそのまま</b>表示しています。担当医師は税理士CSVの氏名にも反映されます。木・土の手術日に外部の麻酔科医が入る場合も、シフトアプリで割り当てればここに表示されます。OPキャンセル等で休診にする枠は「診療あり」を押して「休診」に切り替えてください。</div>`
     :`<p class="muted">この日は診療枠がありません（休診日／シフト未割当）。シフト取り込み後に表示されます。</p>`}`;
 }
 function setHire(id,v){const s=STAFF.find(x=>x.id==id);if(!s)return;s.hire=v;STAFF_META[id]=STAFF_META[id]||{};STAFF_META[id].hire=v;saveState();const c=$('#lv-'+id);if(c)c.innerHTML=`<b>${statutoryLeave(v)}日</b>`;toast('勤務開始日を保存しました');}
