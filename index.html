@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>クリニック タイムカード V42</title>
+<title>クリニック タイムカード V43</title>
 <style>
   :root{
     --bg:#10402c; --panel:#ffffff; --ink:#1f2a24; --muted:#6b7c72;
@@ -153,7 +153,7 @@
 <header class="app">
   <h1>
     <span class="brandlogo" id="brandLogo" title="iPad打刻画面に戻る"><span class="mark">🏥</span><span class="org">福耳会</span></span>
-    <span class="apptitle">クリニック タイムカード<span class="ver">V42</span></span>
+    <span class="apptitle">クリニック タイムカード<span class="ver">V43</span></span>
   </h1>
   <div class="roles">
     <button data-role="ipad" class="active">iPad打刻</button>
@@ -328,6 +328,7 @@ function avatarHTML(s,extra=''){
 let DAYSLOTS={};
 let SLOT_STAFF={};   // date -> slotId -> [code,...]（その枠に割り当てられた人）
 let CODE_UNIT={};    // code -> 'nurse'|'clerk'|'doctor'
+let DOC_ASSIGN={};   // date -> slotId -> [医師名,...]（ドクター職種の割り当て。給与コードが無くても表示する＝麻酔科パート等）
 let CANCELLED={};
 function isCancelled(date,slotId){return !!(CANCELLED[date]&&CANCELLED[date][slotId]);}
 function toggleCancel(date,slotId){
@@ -348,21 +349,23 @@ function buildDaySlots(){
       });
     });
   });
-  Object.keys(DAYSLOTS).forEach(d=>{DAYSLOTS[d]=Object.values(DAYSLOTS[d]).sort((a,b)=>(a.s||'').localeCompare(b.s||''));});
+  // ドクター割り当てのある枠も追加（給与コードが無い麻酔科パート等で枠が消えないように）
+  Object.entries(DOC_ASSIGN).forEach(([date,slots])=>{
+    Object.keys(slots).forEach(id=>{
+      DAYSLOTS[date]=DAYSLOTS[date]||{};
+      if(!DAYSLOTS[date][id]){const t=SLOTLIB[id]||{};DAYSLOTS[date][id]={id,label:t.label||id,s:t.s||'',e:t.e||'',type:t.type||''};}
+    });
+  });
+  Object.keys(DAYSLOTS).forEach(d=>{ if(Array.isArray(DAYSLOTS[d]))return; DAYSLOTS[d]=Object.values(DAYSLOTS[d]).sort((a,b)=>(a.s||'').localeCompare(b.s||''));});
 }
 function staffNameByCode(code){const s=(IMPORT_STAFF||[]).find(x=>x.id===code);return (s&&s.name)||CODE_NAME[code]||code;}
-// その日・その枠の担当医師（職種=doctor）のコード一覧
-function doctorsFor(date,slotId){
-  const codes=(SLOT_STAFF[date]&&SLOT_STAFF[date][slotId])||[];
-  return codes.filter(c=>CODE_UNIT[c]==='doctor');
-}
 function surnameOf(name){return String(name||'').split(/[\s　]/)[0];}  // 苗字だけ（半角/全角スペース対応）
-function colorByCode(code){return (AVATAR_PREF[code]&&AVATAR_PREF[code].color)||PALETTE[hashId(code)%PALETTE.length];}
-// 担当医師を「苗字だけの楕円ピル」で表示（シフト表と同じ見た目）
+function colorByName(name){return PALETTE[hashId(String(name||''))%PALETTE.length];}
+// 担当医師を「苗字だけの楕円ピル」で表示（DOC_ASSIGN＝ドクター職種の割り当て。給与コード不要）
 function doctorPillsFor(date,slotId){
-  const docs=doctorsFor(date,slotId);
-  if(!docs.length)return '<span class="muted">—</span>';
-  const pills=docs.map(c=>`<span class="docpill" style="background:${colorByCode(c)}">${surnameOf(staffNameByCode(c))}</span>`).join('');
+  const names=(DOC_ASSIGN[date]&&DOC_ASSIGN[date][slotId])||[];
+  if(!names.length)return '<span class="muted">—</span>';
+  const pills=names.map(n=>`<span class="docpill" style="background:${colorByName(n)}">${surnameOf(n)}</span>`).join('');
   return `<div class="docwrap">${pills}</div>`;  // 幅を超えたら自動で折り返す
 }
 // その日の休診枠ラベル一覧（カレンダー表示用）
@@ -396,7 +399,7 @@ let REQ_DATA={}; // requests_data.data 生データ（unit毎 {requests,avatars,
 function saveState(){
   try{
     const recs={};STAFF.forEach(s=>{if(s.rec)recs[s.id]=s.rec;});
-    localStorage.setItem('tc_state',JSON.stringify({requests:REQUESTS,recs,dayslots:DAYSLOTS,slotstaff:SLOT_STAFF,codeunit:CODE_UNIT,cancelled:CANCELLED,meta:STAFF_META,hidden:HIDDEN,phys:PHYS,importStaff:IMPORT_STAFF,punchlog:PUNCHLOG,shiftplan:SHIFTPLAN,leaveplan:LEAVEPLAN,nightBand:NIGHT_BAND,slotlib:SLOTLIB,demoMonth:DEMO_MONTH,importInfo:IMPORT_INFO,staffPin:STAFF_PIN,codeName:CODE_NAME,paid:PAID,editLog:EDIT_LOG,reqData:REQ_DATA}));
+    localStorage.setItem('tc_state',JSON.stringify({requests:REQUESTS,recs,dayslots:DAYSLOTS,slotstaff:SLOT_STAFF,codeunit:CODE_UNIT,docassign:DOC_ASSIGN,cancelled:CANCELLED,meta:STAFF_META,hidden:HIDDEN,phys:PHYS,importStaff:IMPORT_STAFF,punchlog:PUNCHLOG,shiftplan:SHIFTPLAN,leaveplan:LEAVEPLAN,nightBand:NIGHT_BAND,slotlib:SLOTLIB,demoMonth:DEMO_MONTH,importInfo:IMPORT_INFO,staffPin:STAFF_PIN,codeName:CODE_NAME,paid:PAID,editLog:EDIT_LOG,reqData:REQ_DATA}));
   }catch(e){}
 }
 function loadState(){
@@ -408,6 +411,7 @@ function loadState(){
     if(st.dayslots)DAYSLOTS=st.dayslots;
     if(st.slotstaff)SLOT_STAFF=st.slotstaff;
     if(st.codeunit)CODE_UNIT=st.codeunit;
+    if(st.docassign)DOC_ASSIGN=st.docassign;
     if(st.cancelled)CANCELLED=st.cancelled;
     if(st.meta)STAFF_META=st.meta;
     if(st.hidden)HIDDEN=st.hidden;
@@ -636,6 +640,17 @@ function parseJob(job,jobName,idx,rep){
       IMPORT_STAFF.push({id:r.code, name:st.fullName||st.name||r.code, pin:st.pin||'', unit:jobName, rec:{in:null,out:null}});
     }
     rep.push({job:jobName,name:st.name,code:st.code||'',resolved:r.code,ok:r.ok,reason:r.reason});});
+  // 診療カレンダーの担当医師：ドクター職種は給与コードが無くても名前を記録（麻酔科パート等）
+  if(jobName==='doctor'){
+    const id2name={}; (job.staff||[]).forEach(st=>{id2name[st.id]=st.fullName||st.name||('医師'+st.id);});
+    Object.entries(job.asgn||{}).forEach(([date,slots])=>{
+      Object.entries(slots||{}).forEach(([slotId,ids])=>{(ids||[]).forEach(id=>{
+        const nm=id2name[id]; if(!nm)return;
+        DOC_ASSIGN[date]=DOC_ASSIGN[date]||{}; DOC_ASSIGN[date][slotId]=DOC_ASSIGN[date][slotId]||[];
+        if(!DOC_ASSIGN[date][slotId].includes(nm))DOC_ASSIGN[date][slotId].push(nm);
+      });});
+    });
+  }
   Object.entries(job.asgn||{}).forEach(([date,slots])=>{
     const per={};
     Object.entries(slots||{}).forEach(([slotId,ids])=>(ids||[]).forEach(id=>{(per[id]=per[id]||[]).push(slotId);}));
@@ -671,7 +686,7 @@ function purgeOtherMonths(){
   });
 }
 function parseImport(wrapped){
-  SHIFTPLAN={};LEAVEPLAN={};STAFF_PIN={};CODE_NAME={};PAID={};SLOTLIB={};IMPORT_STAFF=[]; // NIGHT_BAND(割増時間帯)は管理者設定なので消さない
+  SHIFTPLAN={};LEAVEPLAN={};STAFF_PIN={};CODE_NAME={};PAID={};SLOTLIB={};IMPORT_STAFF=[];DOC_ASSIGN={}; // NIGHT_BAND(割増時間帯)は管理者設定なので消さない
   const idx=rosterIndex();const rep=[];let ym=null;
   ['nurse','clerk','doctor'].forEach(jn=>{const job=wrapped[jn];if(!job)return;
     const r=parseJob(job,jn,idx,rep);if(r&&r.y&&r.m)ym=`${r.y}-${pad2(r.m)}`;});
