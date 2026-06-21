@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>クリニック タイムカード V41</title>
+<title>クリニック タイムカード V42</title>
 <style>
   :root{
     --bg:#10402c; --panel:#ffffff; --ink:#1f2a24; --muted:#6b7c72;
@@ -123,7 +123,8 @@
   .sch-table td .stat-なし{color:#94a3b8}
   .sch-table td{vertical-align:top;padding:6px 4px}
   .sch-table input,.sch-table select{font-size:12px;padding:4px;width:100%;display:block;margin:0 0 3px;box-sizing:border-box}
-  .docpill{display:inline-block;padding:2px 11px;margin:2px 3px 2px 0;border-radius:999px;color:#fff;font-size:12px;font-weight:700;white-space:nowrap;box-shadow:0 1px 2px rgba(0,0,0,.15)}
+  .docwrap{display:flex;flex-wrap:wrap;gap:4px;align-items:center}
+  .docpill{display:inline-block;padding:2px 11px;border-radius:999px;color:#fff;font-size:12px;font-weight:700;white-space:nowrap;box-shadow:0 1px 2px rgba(0,0,0,.15)}
   /* ===== ビー玉プール（出退勤） ===== */
   .pool{position:relative;width:100%;height:min(72vh,720px);border-radius:18px;overflow:hidden;
     border:1px solid var(--line);touch-action:none;
@@ -152,7 +153,7 @@
 <header class="app">
   <h1>
     <span class="brandlogo" id="brandLogo" title="iPad打刻画面に戻る"><span class="mark">🏥</span><span class="org">福耳会</span></span>
-    <span class="apptitle">クリニック タイムカード<span class="ver">V41</span></span>
+    <span class="apptitle">クリニック タイムカード<span class="ver">V42</span></span>
   </h1>
   <div class="roles">
     <button data-role="ipad" class="active">iPad打刻</button>
@@ -361,7 +362,8 @@ function colorByCode(code){return (AVATAR_PREF[code]&&AVATAR_PREF[code].color)||
 function doctorPillsFor(date,slotId){
   const docs=doctorsFor(date,slotId);
   if(!docs.length)return '<span class="muted">—</span>';
-  return docs.map(c=>`<span class="docpill" style="background:${colorByCode(c)}">${surnameOf(staffNameByCode(c))}</span>`).join('');
+  const pills=docs.map(c=>`<span class="docpill" style="background:${colorByCode(c)}">${surnameOf(staffNameByCode(c))}</span>`).join('');
+  return `<div class="docwrap">${pills}</div>`;  // 幅を超えたら自動で折り返す
 }
 // その日の休診枠ラベル一覧（カレンダー表示用）
 function closedCells(date){
@@ -1647,7 +1649,7 @@ function renderCalDetail(){
   }).join('');
   box.innerHTML=`
     <h2 style="font-size:20px;margin:0 0 10px">${dt.getMonth()+1}月${dt.getDate()}日（${dows[dt.getDay()]}）</h2>
-    ${list.length?`<table class="sch-table"><colgroup><col style="width:auto"><col style="width:120px"><col style="width:auto"><col style="width:108px"></colgroup><thead><tr><th style="width:auto">診療枠</th><th>時間</th><th>担当医師</th><th>状態</th></tr></thead><tbody>${rows}</tbody></table>
+    ${list.length?`<table class="sch-table"><colgroup><col style="width:auto"><col style="width:118px"><col style="width:150px"><col style="width:96px"></colgroup><thead><tr><th style="width:auto">診療枠</th><th>時間</th><th>担当医師</th><th>状態</th></tr></thead><tbody>${rows}</tbody></table>
     <div class="note">診療枠の名称・時間・担当医師は<b>シフトアプリの設定をそのまま</b>表示しています。担当医師は税理士CSVの氏名にも反映されます。木・土の手術日に外部の麻酔科医が入る場合も、シフトアプリで割り当てればここに表示されます。OPキャンセル等で休診にする枠は「診療あり」を押して「休診」に切り替えてください。</div>`
     :`<p class="muted">この日は診療枠がありません（休診日／シフト未割当）。シフト取り込み後に表示されます。</p>`}`;
 }
