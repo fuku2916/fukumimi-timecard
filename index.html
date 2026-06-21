@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>クリニック タイムカード V38</title>
+<title>クリニック タイムカード V39</title>
 <style>
   :root{
     --bg:#10402c; --panel:#ffffff; --ink:#1f2a24; --muted:#6b7c72;
@@ -137,7 +137,8 @@
   .marble .nm{padding:3px;text-shadow:0 1px 2px rgba(0,0,0,.4);overflow:hidden;word-break:break-word}
   .marble .em{font-size:1.2em;line-height:1;display:block;margin-bottom:1px}
   .marble.working{box-shadow:inset -7px -9px 16px rgba(0,0,0,.22), inset 9px 11px 18px rgba(255,255,255,.55), 0 0 0 4px rgba(34,197,94,.55), 0 10px 20px rgba(0,0,0,.22)}
-  .marble.done{opacity:.5}
+  .marble.idle{filter:grayscale(.92) brightness(1.03)}   /* 未出勤＝グレー */
+  .marble.done{opacity:.5}                                  /* 退勤後＝薄い色付き */
   .marble.closed{box-shadow:inset -7px -9px 16px rgba(0,0,0,.22), inset 7px 9px 16px rgba(255,255,255,.4), 0 0 0 3px #a5b4fc, 0 6px 12px rgba(0,0,0,.18)}
   .marble.grab{cursor:grabbing;z-index:5}
   .marble.pop{animation:mpop .9s cubic-bezier(.34,1.4,.5,1)}
@@ -150,7 +151,7 @@
 <header class="app">
   <h1>
     <span class="brandlogo" id="brandLogo" title="iPad打刻画面に戻る"><span class="mark">🏥</span><span class="org">福耳会</span></span>
-    <span class="apptitle">クリニック タイムカード<span class="ver">V38</span></span>
+    <span class="apptitle">クリニック タイムカード<span class="ver">V39</span></span>
   </h1>
   <div class="roles">
     <button data-role="ipad" class="active">iPad打刻</button>
@@ -173,7 +174,7 @@
       </div>
       <div class="row" style="font-size:12px;color:var(--muted);margin-bottom:10px;gap:14px">
         <span>⬆ 上にいる人＝<b style="color:var(--in)">出勤中</b></span>
-        <span>⬇ 下にいる人＝<b>未出勤</b>／<span style="opacity:.55">退勤済（うすい）</span></span>
+        <span>⬇ 下にいる人＝<b>未出勤（グレー）</b>／<span style="opacity:.55">退勤済（うすい色）</span></span>
         <span style="margin-left:auto">※ MacBookでは ◀▶ ボタンか矢印キー（←→）で転がせます。色・絵文字は各自のスマホ「アイコン設定」で。</span>
       </div>
       <div class="pool" id="marblePool">
@@ -836,7 +837,7 @@ function marbleStatus(s){
 function updateMarble(m){
   const st=marbleStatus(m.s); m.working=st.working; m.done=st.done; m.closed=st.closed;
   const inflating=m.el.classList.contains('inflate');
-  m.el.className='marble'+(m.working?' working':m.done?' done':m.closed?' closed':'')+(inflating?' inflate':'');
+  m.el.className='marble'+(m.working?' working':m.done?' done':m.closed?' closed':' idle')+(inflating?' inflate':'');
   const ic=AVATAR_PREF[m.s.id]&&AVATAR_PREF[m.s.id].icon;
   const emo=(ic&&ic!=='initial')?`<span class="em">${ic}</span>`:'';
   m.el.innerHTML=`<div class="nm">${emo}${m.s.name}</div>`;
