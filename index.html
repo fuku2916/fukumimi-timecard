@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>クリニック タイムカード V37</title>
+<title>クリニック タイムカード V38</title>
 <style>
   :root{
     --bg:#10402c; --panel:#ffffff; --ink:#1f2a24; --muted:#6b7c72;
@@ -150,7 +150,7 @@
 <header class="app">
   <h1>
     <span class="brandlogo" id="brandLogo" title="iPad打刻画面に戻る"><span class="mark">🏥</span><span class="org">福耳会</span></span>
-    <span class="apptitle">クリニック タイムカード<span class="ver">V37</span></span>
+    <span class="apptitle">クリニック タイムカード<span class="ver">V38</span></span>
   </h1>
   <div class="roles">
     <button data-role="ipad" class="active">iPad打刻</button>
@@ -374,7 +374,7 @@ let REQ_DATA={}; // requests_data.data 生データ（unit毎 {requests,avatars,
 function saveState(){
   try{
     const recs={};STAFF.forEach(s=>{if(s.rec)recs[s.id]=s.rec;});
-    localStorage.setItem('tc_state',JSON.stringify({requests:REQUESTS,recs,dayslots:DAYSLOTS,cancelled:CANCELLED,meta:STAFF_META,hidden:HIDDEN,phys:PHYS,punchlog:PUNCHLOG,shiftplan:SHIFTPLAN,leaveplan:LEAVEPLAN,nightBand:NIGHT_BAND,slotlib:SLOTLIB,demoMonth:DEMO_MONTH,importInfo:IMPORT_INFO,staffPin:STAFF_PIN,codeName:CODE_NAME,paid:PAID,editLog:EDIT_LOG,reqData:REQ_DATA}));
+    localStorage.setItem('tc_state',JSON.stringify({requests:REQUESTS,recs,dayslots:DAYSLOTS,cancelled:CANCELLED,meta:STAFF_META,hidden:HIDDEN,phys:PHYS,importStaff:IMPORT_STAFF,punchlog:PUNCHLOG,shiftplan:SHIFTPLAN,leaveplan:LEAVEPLAN,nightBand:NIGHT_BAND,slotlib:SLOTLIB,demoMonth:DEMO_MONTH,importInfo:IMPORT_INFO,staffPin:STAFF_PIN,codeName:CODE_NAME,paid:PAID,editLog:EDIT_LOG,reqData:REQ_DATA}));
   }catch(e){}
 }
 function loadState(){
@@ -388,6 +388,7 @@ function loadState(){
     if(st.meta)STAFF_META=st.meta;
     if(st.hidden)HIDDEN=st.hidden;
     if(st.phys)PHYS=Object.assign({},PHYS_DEFAULT,st.phys);
+    if(Array.isArray(st.importStaff))IMPORT_STAFF=st.importStaff;
     if(st.slotlib)SLOTLIB=st.slotlib;
     if(st.punchlog)PUNCHLOG=st.punchlog;
     if(st.shiftplan)SHIFTPLAN=st.shiftplan;
@@ -413,6 +414,15 @@ function toHM(m){if(m==null)return'—';const h=Math.floor(m/60),mm=m%60;return 
 function dur(rec){if(!rec||!rec.in||!rec.out)return null;return toMin(rec.out)-toMin(rec.in);}
 function initials(name){return name.replace(/\s/g,'').slice(0,1);}
 function locStaff(){return STAFF.filter(s=>s.loc===curLoc);}
+let IMPORT_STAFF=[];  // シフトアプリから取り込んだ登録者（全職種・拠点で分けない）
+// 打刻画面の名簿：取り込み済みなら登録者全員、未取込なら内蔵名簿（拠点別）
+function displayRoster(){ return (IMPORT_STAFF&&IMPORT_STAFF.length)?IMPORT_STAFF:locStaff(); }
+function punchList(){
+  return displayRoster().filter(s=>!isHidden(s.id)).map(s=>{
+    if(IMPORT_STAFF&&IMPORT_STAFF.length){ s.rec=(PUNCHLOG[s.id]&&PUNCHLOG[s.id][today])||{in:null,out:null}; }
+    return s;
+  });
+}
 function toast(msg){const t=$('#toast');t.textContent=msg;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),2200);}
 
 // 法定休憩控除（6h超で45分,8h超で60分）
@@ -597,6 +607,10 @@ function parseJob(job,jobName,idx,rep){
     if(r.code&&st.pin)STAFF_PIN[r.code]=String(st.pin);
     if(r.code)CODE_NAME[r.code]=st.fullName||st.name||r.code;
     if(r.code&&st.avatar&&typeof st.avatar==='object')AVATAR_PREF[r.code]=st.avatar; // 本人がスマホで設定したアイコンを反映
+    // 打刻画面の名簿に登録（全職種・コードが付いた人。重複はスキップ）
+    if(r.code&&!IMPORT_STAFF.some(x=>x.id===r.code)){
+      IMPORT_STAFF.push({id:r.code, name:st.fullName||st.name||r.code, pin:st.pin||'', unit:jobName, rec:{in:null,out:null}});
+    }
     rep.push({job:jobName,name:st.name,code:st.code||'',resolved:r.code,ok:r.ok,reason:r.reason});});
   Object.entries(job.asgn||{}).forEach(([date,slots])=>{
     const per={};
@@ -633,7 +647,7 @@ function purgeOtherMonths(){
   });
 }
 function parseImport(wrapped){
-  SHIFTPLAN={};LEAVEPLAN={};STAFF_PIN={};CODE_NAME={};PAID={};SLOTLIB={}; // NIGHT_BAND(割増時間帯)は管理者設定なので消さない
+  SHIFTPLAN={};LEAVEPLAN={};STAFF_PIN={};CODE_NAME={};PAID={};SLOTLIB={};IMPORT_STAFF=[]; // NIGHT_BAND(割増時間帯)は管理者設定なので消さない
   const idx=rosterIndex();const rep=[];let ym=null;
   ['nurse','clerk','doctor'].forEach(jn=>{const job=wrapped[jn];if(!job)return;
     const r=parseJob(job,jn,idx,rep);if(r&&r.y&&r.m)ym=`${r.y}-${pad2(r.m)}`;});
@@ -854,7 +868,7 @@ function createMarble(s,pool){
 }
 function renderIpad(){
   const pool=$('#marblePool'); if(!pool)return;
-  const list=locStaff().filter(s=>!isHidden(s.id)); // 非表示（退職・休職など）は出さない
+  const list=punchList(); // 取り込み済みなら登録者全員（拠点で分けない）／未取込は内蔵名簿
   let msg=pool.querySelector('.pool-empty');
   if(!list.length){
     MARBLES.forEach(m=>m.el.remove()); MARBLES=[];
@@ -1553,13 +1567,13 @@ function renderAdminPane(tab){
 // スタッフ設定：打刻画面に表示するスタッフのチェックリスト
 function renderShowList(){
   const box=$('#showList'); if(!box)return;
-  const list=locStaff();
+  const list=displayRoster();
   box.innerHTML=list.map(s=>`<label style="display:flex;align-items:center;gap:8px;padding:6px 8px;background:#fff;border:1px solid var(--line);border-radius:8px;font-size:13px${isHidden(s.id)?';opacity:.55':''}">
     <input type="checkbox" ${isHidden(s.id)?'':'checked'} onchange="setHidden('${s.id}',!this.checked)">
     <span>${s.name}</span>${isHidden(s.id)?'<span class="muted" style="margin-left:auto;font-size:11px">非表示</span>':''}</label>`).join('');
   const shown=list.filter(s=>!isHidden(s.id)).length;
   const cnt=$('#showCount'); if(cnt)cnt.textContent=`表示 ${shown} / 全 ${list.length} 名`;
-  const all=$('#showAllBtn'); if(all)all.onclick=()=>{locStaff().forEach(s=>delete HIDDEN[s.id]);saveState();renderIpad();renderAdmin();};
+  const all=$('#showAllBtn'); if(all)all.onclick=()=>{displayRoster().forEach(s=>delete HIDDEN[s.id]);saveState();renderIpad();renderAdmin();};
 }
 /* ===== 診療カレンダー（月グリッド＋詳細） ===== */
 let calY=Number(today.slice(0,4)), calM=Number(today.slice(5,7)); // 表示中の年・月
