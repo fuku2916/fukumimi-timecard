@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>クリニック タイムカード V43</title>
+<title>クリニック タイムカード V44</title>
 <style>
   :root{
     --bg:#10402c; --panel:#ffffff; --ink:#1f2a24; --muted:#6b7c72;
@@ -153,7 +153,7 @@
 <header class="app">
   <h1>
     <span class="brandlogo" id="brandLogo" title="iPad打刻画面に戻る"><span class="mark">🏥</span><span class="org">福耳会</span></span>
-    <span class="apptitle">クリニック タイムカード<span class="ver">V43</span></span>
+    <span class="apptitle">クリニック タイムカード<span class="ver">V44</span></span>
   </h1>
   <div class="roles">
     <button data-role="ipad" class="active">iPad打刻</button>
@@ -630,6 +630,9 @@ function parseJob(job,jobName,idx,rep){
   Object.assign(SLOTLIB,slotT); // 取り込んだ診療枠を参考表示用に保持
   // 割増時間帯が未設定なら、夜外来コマの時間を初期値として採用（管理者が後で変更可）
   if(!NIGHT_BAND)['pm2','pm_out'].forEach(k=>{if(slotT[k])NIGHT_BAND={s:slotT[k].s,e:slotT[k].e};});
+  // 除外（シフトアプリで配置を取り消した人）：date→slotId→[id]
+  const EXCL=job.manualExclusions||{};
+  const isExcl=(d,sid,id)=>{const e=EXCL[d];return !!(e&&Array.isArray(e[sid])&&e[sid].some(x=>String(x)===String(id)));};
   const id2code={};
   (job.staff||[]).forEach(st=>{const r=resolveCode(st,idx);id2code[st.id]=r.code;
     if(r.code&&st.pin)STAFF_PIN[r.code]=String(st.pin);
@@ -645,6 +648,7 @@ function parseJob(job,jobName,idx,rep){
     const id2name={}; (job.staff||[]).forEach(st=>{id2name[st.id]=st.fullName||st.name||('医師'+st.id);});
     Object.entries(job.asgn||{}).forEach(([date,slots])=>{
       Object.entries(slots||{}).forEach(([slotId,ids])=>{(ids||[]).forEach(id=>{
+        if(isExcl(date,slotId,id))return;                 // 除外された医師は出さない
         const nm=id2name[id]; if(!nm)return;
         DOC_ASSIGN[date]=DOC_ASSIGN[date]||{}; DOC_ASSIGN[date][slotId]=DOC_ASSIGN[date][slotId]||[];
         if(!DOC_ASSIGN[date][slotId].includes(nm))DOC_ASSIGN[date][slotId].push(nm);
@@ -653,7 +657,7 @@ function parseJob(job,jobName,idx,rep){
   }
   Object.entries(job.asgn||{}).forEach(([date,slots])=>{
     const per={};
-    Object.entries(slots||{}).forEach(([slotId,ids])=>(ids||[]).forEach(id=>{(per[id]=per[id]||[]).push(slotId);}));
+    Object.entries(slots||{}).forEach(([slotId,ids])=>(ids||[]).forEach(id=>{if(isExcl(date,slotId,id))return;(per[id]=per[id]||[]).push(slotId);}));
     Object.entries(per).forEach(([id,slist])=>{
       const code=id2code[id];if(!code)return;
       const starts=slist.map(x=>slotT[x]&&toMin(slotT[x].s)).filter(v=>v!=null);
