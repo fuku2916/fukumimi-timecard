@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>クリニック タイムカード V35</title>
+<title>クリニック タイムカード V37</title>
 <style>
   :root{
     --bg:#10402c; --panel:#ffffff; --ink:#1f2a24; --muted:#6b7c72;
@@ -150,7 +150,7 @@
 <header class="app">
   <h1>
     <span class="brandlogo" id="brandLogo" title="iPad打刻画面に戻る"><span class="mark">🏥</span><span class="org">福耳会</span></span>
-    <span class="apptitle">クリニック タイムカード<span class="ver">V35</span></span>
+    <span class="apptitle">クリニック タイムカード<span class="ver">V37</span></span>
   </h1>
   <div class="roles">
     <button data-role="ipad" class="active">iPad打刻</button>
@@ -169,7 +169,6 @@
         <span class="muted" style="font-size:12px;margin-left:8px">名前のビー玉をタップして出勤・退勤。出勤すると上へふわっと浮かびます。</span>
         <button class="btn ghost mini" id="rollL" style="margin-left:auto" title="押している間だけ左へ転がる（←キーでも可）">◀ 左</button>
         <button class="btn ghost mini" id="rollR" title="押している間だけ右へ転がる（→キーでも可）">右 ▶</button>
-        <button class="btn ghost mini" id="tiltBtn" title="iPadなど傾きセンサーのある端末用">🎲 傾き(iPad)</button>
         <button class="btn ghost mini" id="shakeBtn">シャッフル</button>
       </div>
       <div class="row" style="font-size:12px;color:var(--muted);margin-bottom:10px;gap:14px">
@@ -805,9 +804,10 @@ function medianBySlot(){
 /* ===== ビー玉プール（物理シミュレーション） ===== */
 let MARBLES=[];           // {s, el, x,y,vx,vy,r, working,done,closed, dragging}
 let marbleRAF=null, marbleLast=0;
-let tiltGX=0;             // -1..1（傾き）
+let tiltGX=0;             // -1..1（実際に効いている傾き＝平滑化後）
+let tiltTarget=0;         // -1..1（センサー/ボタン/キーが指示する目標値）
 // アニメーション調整パラメータ（管理者画面で変更）
-const PHYS_DEFAULT={buoy:900, balloonScale:1.18, ballScale:1.0, ballGravity:1500, visc:50};
+const PHYS_DEFAULT={buoy:900, balloonScale:1.18, ballScale:1.0, ballGravity:1500, visc:50, tiltSens:5};
 let PHYS=Object.assign({},PHYS_DEFAULT);
 function balloonDrag(){return 1-(PHYS.visc/100)*0.20;}  // 粘稠度→風船の減衰（既定50で0.90）
 function ballDrag(){return 1-(PHYS.visc/100)*0.016;}    // 粘稠度→ボールの減衰（既定50で0.992）
@@ -870,11 +870,10 @@ function renderIpad(){
   MARBLES.forEach(m=>{ m.baseR=r; updateMarble(m); m.x=Math.max(m.r,Math.min(W-m.r,m.x)); m.y=Math.max(m.r,Math.min(H-m.r,m.y)); });
   if(!marbleRAF){marbleLast=performance.now(); marbleRAF=requestAnimationFrame(marbleLoop);}
   // ボタン（毎回バインドし直しても安全）
-  const tb=$('#tiltBtn'); if(tb)tb.onclick=enableTilt;
   const sb=$('#shakeBtn'); if(sb)sb.onclick=()=>{MARBLES.forEach(m=>{m.vx+=(Math.random()-.5)*1600;m.vy-=Math.random()*800;});};
   // MacBook用：◀▶ ボタンを押している間だけ転がす
   const rl=$('#rollL'), rr=$('#rollR');
-  const dn=v=>e=>{e.preventDefault();tiltGX=v;}, up=()=>{tiltGX=0;};
+  const dn=v=>e=>{e.preventDefault();tiltTarget=v;}, up=()=>{tiltTarget=0;};
   if(rl){rl.onpointerdown=dn(-0.85);rl.onpointerup=up;rl.onpointerleave=up;rl.onpointercancel=up;}
   if(rr){rr.onpointerdown=dn(0.85);rr.onpointerup=up;rr.onpointerleave=up;rr.onpointercancel=up;}
 }
@@ -882,6 +881,7 @@ function stepMarbles(dt){
   const pool=$('#marblePool'); if(!pool)return;
   const W=pool.clientWidth, H=pool.clientHeight, G=1500;
   const t=performance.now()/1000;
+  tiltGX += (tiltTarget - tiltGX)*Math.min(1, dt*7);   // 平滑化：ジッターをならして“ぬるっと”動かす
   MARBLES.forEach(m=>{
     if(m.dragging)return;
     if(m.working){
@@ -934,21 +934,38 @@ function popMarble(id,kind){
     m.vy=200;
   }
 }
-function enableTilt(){
-  const handler=ev=>{ const g=ev.gamma; if(g==null)return; tiltGX=Math.max(-1,Math.min(1,g/40)); };
-  if(typeof DeviceOrientationEvent!=='undefined' && typeof DeviceOrientationEvent.requestPermission==='function'){
-    DeviceOrientationEvent.requestPermission().then(p=>{ if(p==='granted'){window.addEventListener('deviceorientation',handler);toast('傾きセンサー オン：iPadを左右に傾けてみてください');} else toast('傾きの使用が許可されませんでした'); }).catch(()=>toast('この端末では傾きを使えません'));
-  }else if(typeof DeviceOrientationEvent!=='undefined'){
-    window.addEventListener('deviceorientation',handler); toast('傾きセンサー オン：端末を左右に傾けてみてください');
-  }else toast('この端末は傾きセンサーに対応していません');
+let tiltEnabled=false;
+function tiltHandler(ev){ let g=ev.gamma; if(g==null)return;
+  if(Math.abs(g)<2)g=0;                                  // デッドゾーン（微振動を無視）
+  const fullDeg=Math.max(8, 65 - PHYS.tiltSens*6);       // 感度：大きいほど小さい角度で最大に
+  tiltTarget=Math.max(-1,Math.min(1, g/fullDeg));
 }
+function enableTilt(silent){
+  if(tiltEnabled)return;
+  if(typeof DeviceOrientationEvent!=='undefined' && typeof DeviceOrientationEvent.requestPermission==='function'){
+    // iOS：許可が必要（最初のタップで一度だけ）
+    DeviceOrientationEvent.requestPermission().then(p=>{ if(p==='granted'){window.addEventListener('deviceorientation',tiltHandler);tiltEnabled=true;if(!silent)toast('傾きセンサー オン：iPadを左右に傾けてみてください');} }).catch(()=>{});
+  }else if(typeof DeviceOrientationEvent!=='undefined'){
+    window.addEventListener('deviceorientation',tiltHandler); tiltEnabled=true;
+  }
+}
+// iPad前提：傾きを常時ONに。iOSは仕様上「最初の操作」が必要なため、最初のタップ等で自動有効化する。
+(function setupAutoTilt(){
+  if(typeof DeviceOrientationEvent==='undefined')return;
+  if(typeof DeviceOrientationEvent.requestPermission==='function'){
+    const once=()=>{ enableTilt(); window.removeEventListener('pointerdown',once); window.removeEventListener('touchend',once); window.removeEventListener('click',once); };
+    window.addEventListener('pointerdown',once); window.addEventListener('touchend',once); window.addEventListener('click',once);
+  }else{
+    enableTilt(true); // Android等：即時ON
+  }
+})();
 // MacBook等：矢印キー（←→）／A・Dで左右に転がす（打刻画面のときだけ）
 window.addEventListener('keydown',e=>{
   const v=$('#view-ipad'); if(!v||!v.classList.contains('active'))return;
-  if(e.key==='ArrowLeft'||e.key==='a'){tiltGX=-0.85;e.preventDefault();}
-  else if(e.key==='ArrowRight'||e.key==='d'){tiltGX=0.85;e.preventDefault();}
+  if(e.key==='ArrowLeft'||e.key==='a'){tiltTarget=-0.85;e.preventDefault();}
+  else if(e.key==='ArrowRight'||e.key==='d'){tiltTarget=0.85;e.preventDefault();}
 });
-window.addEventListener('keyup',e=>{ if(['ArrowLeft','ArrowRight','a','d'].includes(e.key))tiltGX=0; });
+window.addEventListener('keyup',e=>{ if(['ArrowLeft','ArrowRight','a','d'].includes(e.key))tiltTarget=0; });
 function nowHM(){const d=new Date();return `${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;}
 function openPunch(s){
   const working=s.rec&&s.rec.in&&!s.rec.out;
@@ -1476,6 +1493,7 @@ function renderAdminPane(tab){
       {k:'ballScale',  label:'球の大きさ',     min:0.6, max:1.6,  step:0.02,unit:'倍',hint:'未出勤の玉の大きさ'},
       {k:'ballGravity',label:'球の重さ',       min:300, max:2600, step:50,  unit:'', hint:'大きいほど速く沈む・転がる'},
       {k:'visc',       label:'空間の粘稠度',   min:0,   max:100,  step:1,   unit:'%',hint:'高いほどドロドロ（動きが鈍る）。下の玉が動かない時は下げる'},
+      {k:'tiltSens',   label:'傾き感度',       min:1,   max:10,   step:1,   unit:'', hint:'大きいほど少し傾けただけでよく転がる（iPadの傾けセンサー用）'},
     ];
     p.innerHTML=`
       <p class="muted" style="margin:0 0 12px">打刻画面のビー玉／風船の動きを調整します。変更はすぐ反映され、保存されます。下の玉が動かない時は「空間の粘稠度」を下げるか「球の重さ」を上げてください。</p>
