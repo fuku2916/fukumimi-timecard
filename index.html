@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>クリニック タイムカード V46</title>
+<title>クリニック タイムカード V47</title>
 <style>
   :root{
     --bg:#10402c; --panel:#ffffff; --ink:#1f2a24; --muted:#6b7c72;
@@ -157,7 +157,7 @@
 <header class="app">
   <h1>
     <span class="brandlogo" id="brandLogo" title="iPad打刻画面に戻る"><span class="mark">🏥</span><span class="org">福耳会</span></span>
-    <span class="apptitle">クリニック タイムカード<span class="ver">V46</span></span>
+    <span class="apptitle">クリニック タイムカード<span class="ver">V47</span></span>
   </h1>
   <div class="roles">
     <button data-role="ipad" class="active">iPad打刻</button>
@@ -1711,13 +1711,14 @@ function renderCalDetail(){
       ${hol?`<span class="pink-tag">祝日：${hol}</span>`:''}
       ${closed?`<span class="pink-tag">終日休診${shiftClosed?'（シフトアプリ）':''}</span>`:''}
       ${shiftClosed?`<span class="muted" style="margin-left:auto;font-size:12px">シフトアプリの休診日です（変更はシフトアプリで）</span>`
-        :`<button class="btn ghost mini" style="margin-left:auto" onclick="toggleClosedDay('${selDate}')">${CLOSED_DAYS[selDate]?'終日休診を解除':'この日を終日休診にする'}</button>`}
+        :CLOSED_DAYS[selDate]?`<button class="btn ghost mini" style="margin-left:auto" onclick="toggleClosedDay('${selDate}')">終日休診を解除（旧端末ローカル設定）</button>`
+        :`<span class="muted" style="margin-left:auto;font-size:12px">終日休診（お盆休み等）はシフトアプリで設定してください</span>`}
     </div>`;
   box.innerHTML=`
     ${head}
     ${closed?`<p class="muted">この日は<b>終日休診</b>です（お盆休み等）。スタッフは打刻が無くても無断欠勤になりません。`+(hol?'　祝日：'+hol:'')+`</p>`
     :list.length?`<table class="sch-table"><colgroup><col style="width:auto"><col style="width:118px"><col style="width:150px"><col style="width:96px"></colgroup><thead><tr><th style="width:auto">診療枠</th><th>時間</th><th>担当医師</th><th>状態</th></tr></thead><tbody>${rows}</tbody></table>
-    <div class="note">診療枠の名称・時間・担当医師は<b>シフトアプリの設定をそのまま</b>表示しています。担当医師は税理士CSVの氏名にも反映されます。木・土の手術日に外部の麻酔科医が入る場合も、シフトアプリで割り当てればここに表示されます。OPキャンセル等で1枠だけ休診にする場合は「診療あり」を押して「休診」に切り替えてください。お盆休み等で1日まるごと休む場合は上の「この日を終日休診にする」を押してください。</div>`
+    <div class="note">診療枠の名称・時間・担当医師は<b>シフトアプリの設定をそのまま</b>表示しています。担当医師は税理士CSVの氏名にも反映されます。木・土の手術日に外部の麻酔科医が入る場合も、シフトアプリで割り当てればここに表示されます。OPキャンセル等で1枠だけ休診にする場合は「診療あり」を押して「休診」に切り替えてください。お盆休み等で1日まるごと休む場合は、<b>シフトアプリで休診日に設定</b>すると、取り込み後に全端末へ反映されます。</div>`
     :`<p class="muted">この日は診療枠がありません（休診日／シフト未割当）。シフト取り込み後に表示されます。`+(hol?'　祝日：'+hol:'')+`</p>`}`;
 }
 function setHire(id,v){const s=STAFF.find(x=>x.id==id);if(!s)return;s.hire=v;STAFF_META[id]=STAFF_META[id]||{};STAFF_META[id].hire=v;saveState();const c=$('#lv-'+id);if(c)c.innerHTML=`<b>${statutoryLeave(v)}日</b>`;toast('勤務開始日を保存しました');}
