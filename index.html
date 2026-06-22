@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>クリニック タイムカード V47</title>
+<title>クリニック タイムカード V48</title>
 <style>
   :root{
     --bg:#10402c; --panel:#ffffff; --ink:#1f2a24; --muted:#6b7c72;
@@ -157,7 +157,7 @@
 <header class="app">
   <h1>
     <span class="brandlogo" id="brandLogo" title="iPad打刻画面に戻る"><span class="mark">🏥</span><span class="org">福耳会</span></span>
-    <span class="apptitle">クリニック タイムカード<span class="ver">V47</span></span>
+    <span class="apptitle">クリニック タイムカード<span class="ver">V48</span></span>
   </h1>
   <div class="roles">
     <button data-role="ipad" class="active">iPad打刻</button>
@@ -177,6 +177,7 @@
         <button class="btn ghost mini" id="rollL" style="margin-left:auto" title="押している間だけ左へ転がる（←キーでも可）">◀ 左</button>
         <button class="btn ghost mini" id="rollR" title="押している間だけ右へ転がる（→キーでも可）">右 ▶</button>
         <button class="btn ghost mini" id="shakeBtn">シャッフル</button>
+        <button class="btn ghost mini" id="tiltBtn" title="iPadを傾けてビー玉を転がす機能をオンにします">🧭 傾きセンサー</button>
       </div>
       <div class="row" style="font-size:12px;color:var(--muted);margin-bottom:10px;gap:14px">
         <span>⬆ 上にいる人＝<b style="color:var(--in)">出勤中</b></span>
@@ -938,6 +939,7 @@ function renderIpad(){
   if(!marbleRAF){marbleLast=performance.now(); marbleRAF=requestAnimationFrame(marbleLoop);}
   // ボタン（毎回バインドし直しても安全）
   const sb=$('#shakeBtn'); if(sb)sb.onclick=()=>{MARBLES.forEach(m=>{m.vx+=(Math.random()-.5)*1600;m.vy-=Math.random()*800;});};
+  const tb=$('#tiltBtn'); if(tb)tb.onclick=()=>enableTilt(false);  // 手動で傾きセンサーの許可を呼び直す（許可リセット時の復帰口）
   // MacBook用：◀▶ ボタンを押している間だけ転がす
   const rl=$('#rollL'), rr=$('#rollR');
   const dn=v=>e=>{e.preventDefault();tiltTarget=v;}, up=()=>{tiltTarget=0;};
@@ -1001,27 +1003,43 @@ function popMarble(id,kind){
     m.vy=200;
   }
 }
-let tiltEnabled=false;
+let tiltEnabled=false, tiltPending=false;
 function tiltHandler(ev){ let g=ev.gamma; if(g==null)return;
   if(Math.abs(g)<2)g=0;                                  // デッドゾーン（微振動を無視）
   const fullDeg=Math.max(8, 65 - PHYS.tiltSens*6);       // 感度：大きいほど小さい角度で最大に
   tiltTarget=Math.max(-1,Math.min(1, g/fullDeg));
 }
 function enableTilt(silent){
-  if(tiltEnabled)return;
+  if(tiltEnabled||tiltPending)return;
   if(typeof DeviceOrientationEvent!=='undefined' && typeof DeviceOrientationEvent.requestPermission==='function'){
-    // iOS：許可が必要（最初のタップで一度だけ）
-    DeviceOrientationEvent.requestPermission().then(p=>{ if(p==='granted'){window.addEventListener('deviceorientation',tiltHandler);tiltEnabled=true;if(!silent)toast('傾きセンサー オン：iPadを左右に傾けてみてください');} }).catch(()=>{});
+    // iOS：許可が必要。requestPermission は touchend/click 等“正規のユーザー操作”の中から呼ぶ。
+    tiltPending=true;
+    DeviceOrientationEvent.requestPermission().then(p=>{
+      tiltPending=false;
+      if(p==='granted'){
+        window.addEventListener('deviceorientation',tiltHandler); tiltEnabled=true;
+        if(!silent)toast('傾きセンサー オン：iPadを左右に傾けてみてください');
+      }else if(!silent){
+        toast('傾きセンサーが許可されませんでした。ページを再読み込みして「許可」を選んでください');
+      }
+    }).catch(()=>{tiltPending=false;});
   }else if(typeof DeviceOrientationEvent!=='undefined'){
     window.addEventListener('deviceorientation',tiltHandler); tiltEnabled=true;
+    if(!silent)toast('傾きセンサー オン：iPadを左右に傾けてみてください');
+  }else if(!silent){
+    toast('この端末は傾きセンサーに対応していません');
   }
 }
-// iPad前提：傾きを常時ONに。iOSは仕様上「最初の操作」が必要なため、最初のタップ等で自動有効化する。
+// iPad前提：傾きを常時ONに。iOSは“正規のユーザー操作”が必要なため、画面に触れた時点で自動有効化する。
+// 注意：pointerdown は iOS で正規の操作と認められないことがあるので touchend/click を使い、許可されるまで毎タップ再試行する。
 (function setupAutoTilt(){
   if(typeof DeviceOrientationEvent==='undefined')return;
   if(typeof DeviceOrientationEvent.requestPermission==='function'){
-    const once=()=>{ enableTilt(); window.removeEventListener('pointerdown',once); window.removeEventListener('touchend',once); window.removeEventListener('click',once); };
-    window.addEventListener('pointerdown',once); window.addEventListener('touchend',once); window.addEventListener('click',once);
+    const tryEnable=()=>{
+      if(tiltEnabled){ window.removeEventListener('touchend',tryEnable); window.removeEventListener('click',tryEnable); return; }
+      enableTilt(true); // 自動時は無音（ボタン押下時のみメッセージを出す）
+    };
+    window.addEventListener('touchend',tryEnable); window.addEventListener('click',tryEnable);
   }else{
     enableTilt(true); // Android等：即時ON
   }
