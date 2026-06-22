@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>クリニック タイムカード V48</title>
+<title>クリニック タイムカード V49</title>
 <style>
   :root{
     --bg:#10402c; --panel:#ffffff; --ink:#1f2a24; --muted:#6b7c72;
@@ -130,7 +130,7 @@
   .docwrap{display:flex;flex-wrap:wrap;gap:4px;align-items:center}
   .docpill{display:inline-block;padding:2px 11px;border-radius:999px;color:#fff;font-size:12px;font-weight:700;white-space:nowrap;box-shadow:0 1px 2px rgba(0,0,0,.15)}
   /* ===== ビー玉プール（出退勤） ===== */
-  .pool{position:relative;width:100%;height:min(72vh,720px);border-radius:18px;overflow:hidden;
+  .pool{position:relative;width:100%;height:calc(100vh - 320px);height:calc(100dvh - 320px);min-height:320px;border-radius:18px;overflow:hidden;
     border:1px solid var(--line);touch-action:none;
     background:linear-gradient(180deg,#e9f7ef 0%,#e9f7ef 38%,#f4f7f5 60%,#eef1ee 100%)}
   .pool-zone{position:absolute;left:12px;font-size:12px;font-weight:700;letter-spacing:.04em;pointer-events:none}
@@ -157,7 +157,7 @@
 <header class="app">
   <h1>
     <span class="brandlogo" id="brandLogo" title="iPad打刻画面に戻る"><span class="mark">🏥</span><span class="org">福耳会</span></span>
-    <span class="apptitle">クリニック タイムカード<span class="ver">V48</span></span>
+    <span class="apptitle">クリニック タイムカード<span class="ver">V49</span></span>
   </h1>
   <div class="roles">
     <button data-role="ipad" class="active">iPad打刻</button>
@@ -920,8 +920,17 @@ function createMarble(s,pool){
   el.addEventListener('pointerup',endDrag); el.addEventListener('pointercancel',endDrag);
   return m;
 }
+// 打刻プールの高さを「画面の高さ − プールの上端 − 余白」で算出し、スクロール無しで全体が収まるようにする
+function fitPoolHeight(pool){
+  pool=pool||$('#marblePool'); if(!pool)return;
+  const top=pool.getBoundingClientRect().top; // 画面上端からプール上端までの距離
+  const vh=window.innerHeight;
+  const h=Math.max(320, Math.round(vh - top - 16)); // 16=下の余白。最低320pxは確保
+  pool.style.height=h+'px';
+}
 function renderIpad(){
   const pool=$('#marblePool'); if(!pool)return;
+  fitPoolHeight(pool);
   const list=punchList(); // 取り込み済みなら登録者全員（拠点で分けない）／未取込は内蔵名簿
   let msg=pool.querySelector('.pool-empty');
   if(!list.length){
@@ -1051,6 +1060,10 @@ window.addEventListener('keydown',e=>{
   else if(e.key==='ArrowRight'||e.key==='d'){tiltTarget=0.85;e.preventDefault();}
 });
 window.addEventListener('keyup',e=>{ if(['ArrowLeft','ArrowRight','a','d'].includes(e.key))tiltTarget=0; });
+// 画面回転・ウィンドウサイズ変化に追従して打刻プールの高さを再計算
+function reflowIpad(){ const v=$('#view-ipad'); if(v&&v.classList.contains('active'))renderIpad(); }
+window.addEventListener('resize',reflowIpad);
+window.addEventListener('orientationchange',()=>setTimeout(reflowIpad,250));
 function nowHM(){const d=new Date();return `${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;}
 function openPunch(s){
   const working=s.rec&&s.rec.in&&!s.rec.out;
