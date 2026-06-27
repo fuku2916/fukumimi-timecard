@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>クリニック タイムカード V51</title>
+<title>クリニック タイムカード V52</title>
 <style>
   :root{
     --bg:#10402c; --panel:#ffffff; --ink:#1f2a24; --muted:#6b7c72;
@@ -100,10 +100,11 @@
   .cal-layout{display:flex;gap:18px;flex-wrap:wrap;align-items:flex-start}
   .cal-month{flex:1 1 460px;min-width:320px}
   .cal-detail{flex:1 1 300px;min-width:260px}
-  .cal-head{display:flex;align-items:center;gap:8px;margin-bottom:10px;flex-wrap:wrap}
-  .cal-head .mtitle{font-size:26px;font-weight:800;line-height:1;display:flex;align-items:baseline;gap:8px}
+  .cal-head{display:flex;align-items:center;gap:16px;margin-bottom:10px;flex-wrap:wrap}
+  .cal-head .mtitle{font-size:26px;font-weight:800;line-height:1;display:flex;align-items:center;gap:8px}
   .cal-head .mtitle small{font-size:13px;font-weight:600;color:var(--muted);margin-left:0}
-  .cal-title-row{display:flex;align-items:center;gap:12px}
+  .cal-title-row{display:inline-flex;align-items:center;gap:12px;flex:0 0 auto}
+  .cal-clinic-name{font-size:20px;font-weight:800;color:var(--muted);line-height:1.2}
   .cal-nav{border:2px solid #d9e4dd;background:#fff;border-radius:14px;width:56px;height:56px;font-size:34px;font-weight:900;line-height:1;cursor:pointer;color:var(--ink);display:inline-flex;align-items:center;justify-content:center;box-shadow:0 2px 4px rgba(0,0,0,.06);transition:.12s}
   .cal-nav:hover{background:#f3f8f5;border-color:var(--brand);color:var(--brand-d);transform:translateY(-1px)}
   .cal-nav:active{transform:scale(.96);background:#e8f3ed}
@@ -160,7 +161,7 @@
 <header class="app">
   <h1>
     <span class="brandlogo" id="brandLogo" title="iPad打刻画面に戻る"><span class="mark">🏥</span><span class="org">福耳会</span></span>
-    <span class="apptitle">クリニック タイムカード<span class="ver">V51</span></span>
+    <span class="apptitle">クリニック タイムカード<span class="ver">V52</span></span>
   </h1>
   <div class="roles">
     <button data-role="ipad" class="active">iPad打刻</button>
@@ -1715,9 +1716,12 @@ function renderCalMonth(){
   }
   wrap.innerHTML=`
     <div class="cal-head">
-      <button class="cal-nav" onclick="calShift(-1)" aria-label="前月へ">‹</button>
-      <span class="mtitle">${calY}年${calM}月<small>${LOCATIONS.find(l=>l.id===curLoc).name}</small></span>
-      <button class="cal-nav" onclick="calShift(1)" aria-label="翌月へ">›</button>
+      <div class="cal-title-row">
+        <button class="cal-nav" onclick="moveCal(-1)" title="前の月へ" aria-label="前の月へ">‹</button>
+        <div class="mtitle"><span id="calYM">${y}年${m+1}月</span></div>
+        <button class="cal-nav" onclick="moveCal(1)" title="次の月へ" aria-label="次の月へ">›</button>
+      </div>
+      <div class="cal-clinic-name">${loc.short}</div>
     </div>
     <div class="cal-grid">
       ${dow.map((d,i)=>`<div class="dow${i===0?' sun':i===6?' sat':''}">${d}</div>`).join('')}
@@ -1921,6 +1925,15 @@ CHANGELOG V51
 - 矢印のフォントサイズを大きくし、hover / active 時の視覚的フィードバックを追加。
 - クリニック名は年月切替ボタン群とは分離して、同じヘッダー内に小さく表示。
 - アプリ表示バージョンを V50 から V51 に更新。
+-->
+<!--
+CHANGELOG V52
+- 管理画面「診療カレンダー」のヘッダー配置を再調整。
+- 右矢印をクリニック名の右側ではなく、「YYYY年M月」のすぐ右隣に配置。
+- 表示順を「左矢印 → 年月 → 右矢印 → クリニック名」に変更。
+- 年月切替ボタン群を `.cal-title-row` として独立させ、クリニック名に押し出されない構造に変更。
+- クリニック名表示用に `.cal-clinic-name` を追加。
+- アプリ表示バージョンを V51 から V52 に更新。
 -->
 </body>
 </html>
