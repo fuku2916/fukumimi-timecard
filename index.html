@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>クリニック タイムカード V52</title>
+<title>クリニック タイムカード V53</title>
 <style>
   :root{
     --bg:#10402c; --panel:#ffffff; --ink:#1f2a24; --muted:#6b7c72;
@@ -161,7 +161,7 @@
 <header class="app">
   <h1>
     <span class="brandlogo" id="brandLogo" title="iPad打刻画面に戻る"><span class="mark">🏥</span><span class="org">福耳会</span></span>
-    <span class="apptitle">クリニック タイムカード<span class="ver">V52</span></span>
+    <span class="apptitle">クリニック タイムカード<span class="ver">V53</span></span>
   </h1>
   <div class="roles">
     <button data-role="ipad" class="active">iPad打刻</button>
@@ -1717,11 +1717,11 @@ function renderCalMonth(){
   wrap.innerHTML=`
     <div class="cal-head">
       <div class="cal-title-row">
-        <button class="cal-nav" onclick="moveCal(-1)" title="前の月へ" aria-label="前の月へ">‹</button>
-        <div class="mtitle"><span id="calYM">${y}年${m+1}月</span></div>
-        <button class="cal-nav" onclick="moveCal(1)" title="次の月へ" aria-label="次の月へ">›</button>
+        <button class="cal-nav" onclick="calShift(-1)" title="前の月へ" aria-label="前の月へ">‹</button>
+        <span class="mtitle">${calY}年${calM}月</span>
+        <button class="cal-nav" onclick="calShift(1)" title="次の月へ" aria-label="次の月へ">›</button>
       </div>
-      <div class="cal-clinic-name">${loc.short}</div>
+      <div class="cal-clinic-name">${LOCATIONS.find(l=>l.id===curLoc).name}</div>
     </div>
     <div class="cal-grid">
       ${dow.map((d,i)=>`<div class="dow${i===0?' sun':i===6?' sat':''}">${d}</div>`).join('')}
@@ -1927,13 +1927,14 @@ CHANGELOG V51
 - アプリ表示バージョンを V50 から V51 に更新。
 -->
 <!--
-CHANGELOG V52
-- 管理画面「診療カレンダー」のヘッダー配置を再調整。
-- 右矢印をクリニック名の右側ではなく、「YYYY年M月」のすぐ右隣に配置。
+CHANGELOG V53
+- V52で診療カレンダー本体が表示されなくなった不具合を修正。
+- 原因: V52で元の関数名 `calShift()` を誤って `moveCal()` に変更し、元の変数 `calY` / `calM` も未定義の `y` / `m` に変更していたため、JavaScriptエラーで描画が止まっていた。
+- V51を安全なベースとして復旧。
+- カレンダー本体 `.cal-grid` や日付セル生成ロジックには触れず、`renderCalMonth()` 内のヘッダー部分だけを最小修正。
 - 表示順を「左矢印 → 年月 → 右矢印 → クリニック名」に変更。
-- 年月切替ボタン群を `.cal-title-row` として独立させ、クリニック名に押し出されない構造に変更。
-- クリニック名表示用に `.cal-clinic-name` を追加。
-- アプリ表示バージョンを V51 から V52 に更新。
+- 右矢印が「YYYY年M月」のすぐ右隣に来るよう修正。
+- アプリ表示バージョンを V53 に更新。
 -->
 </body>
 </html>
