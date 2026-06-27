@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>クリニック タイムカード V61</title>
+<title>クリニック タイムカード V62</title>
 <style>
   :root{
     --bg:#10402c; --panel:#ffffff; --ink:#1f2a24; --muted:#6b7c72;
@@ -170,7 +170,7 @@
 <header class="app">
   <h1>
     <span class="brandlogo" id="brandLogo" title="iPad打刻画面に戻る"><span class="mark">🏥</span><span class="org">福耳会</span></span>
-    <span class="apptitle">クリニック タイムカード<span class="ver">V61</span></span>
+    <span class="apptitle">クリニック タイムカード<span class="ver">V62</span></span>
   </h1>
   <div class="roles">
     <button data-role="ipad" class="active">iPad打刻</button>
@@ -778,6 +778,19 @@ function allCorrections(){
     (w.timecardCorrections||[]).forEach((c,idx)=>out.push(Object.assign({unit,idx},c)));});
   return out;
 }
+function correctionFor(code,date,status){
+  return allCorrections().find(c=>String(c.code)===String(code)&&String(c.date)===String(date)&&(!status||(c.status||'pending')===status));
+}
+function hasPendingCorrection(code,date){return !!correctionFor(code,date,'pending');}
+function hasApprovedCorrection(code,date){return !!correctionFor(code,date,'approved');}
+function absenceReasonFor(code,date,s){
+  const punched=PUNCHLOG[code]&&PUNCHLOG[code][date]&&PUNCHLOG[code][date].in&&PUNCHLOG[code][date].out;
+  if(punched)return '';
+  if(LEAVEPLAN[code]&&LEAVEPLAN[code][date])return LEAVEPLAN[code][date]==='paid'?'有給':'休み';
+  if(isClosedDay(date)||closureFor(s,date))return '休診';
+  if(hasPendingCorrection(code,date))return '修正申請中';
+  return '欠勤疑い';
+}
 
 /* ===== 本人データのクラウド保存／取得（timecard_data テーブル, 行 id='main'） =====
    data = { staff: { <code>: {name,pin,punch,requests,avatar,updatedAt} }, updatedAt } */
@@ -1013,7 +1026,7 @@ function aggregateMonthRows(ym,clinicFilter='all'){
     if(plan)Object.keys(plan).filter(d=>d.startsWith(ym)&&includeDateForClinic(s,d,clinicFilter)).forEach(d=>{
       const punched=log[d]&&log[d].in&&log[d].out;
       const excused=lv&&lv[d];
-      if(!punched&&!excused&&!closureFor(s,d)&&!isClosedDay(d))absent++;
+      if(!punched&&!excused&&!closureFor(s,d)&&!isClosedDay(d)&&!hasPendingCorrection(s.id,d))absent++;
     });
     const usedLeave = (PAID[s.id]!=null)
       ? paidUsedInMonth(s.id,ym)
@@ -1775,12 +1788,12 @@ function renderAdminPane(tab){
       <td style="text-align:right;color:#94a3b8">0:00</td>
       <td>${d.tags.map(t=>`<span class="pill ${t.c}">${t.t}</span>`).join(' ')}</td>
     </tr>`;}).join('')}</tbody></table></div>
-    <div class="note">実労働時間＝入退室−自動休憩（6h超45分/8h超60分）。法定残業＝実労働が1日8時間を超えた分（赤字）。週40時間チェックは上段で自動集計します。赤＝40時間超、黄＝38時間以上で注意、緑＝問題なし。夜診察＝「診察時間の設定」で決めた割増対象時間帯に働いた時間（金額は扱いません）。実深夜は当院では常に0です。診療カレンダーで休診の人は集計対象外（無断欠勤になりません）。</div>`;
+    <div class="note">実労働時間＝入退室−自動休憩（6h超45分/8h超60分）。法定残業＝実労働が1日8時間を超えた分（赤字）。週40時間チェックは上段で自動集計します。赤＝40時間超、黄＝38時間以上で注意、緑＝問題なし。夜診察＝「診察時間の設定」で決めた割増対象時間帯に働いた時間（金額は扱いません）。実深夜は当院では常に0です。診療カレンダーで休診の人は集計対象外（無断欠勤になりません）。打刻修正申請中の未打刻は、承認/却下までは欠勤疑いではなく「修正申請中」として扱います。</div>`;
   }else if(tab==='appr'){
     const ps=REQUESTS.filter(r=>r.status==='pending');
     const corr=allCorrections().filter(c=>(c.status||'pending')==='pending');
     p.innerHTML=`
-    <h2 style="font-size:14px;margin:0 0 6px">打刻修正の申告（スタッフのスマホから）</h2>
+    <h2 style="font-size:14px;margin:0 0 6px">打刻修正の申告（シフト管理アプリのスタッフスマホ画面から）</h2>
     ${corr.length?`<table><thead><tr><th>氏名</th><th>コード</th><th>対象日</th><th>希望(出–退)</th><th>理由</th><th></th></tr></thead>
       <tbody>${corr.map(c=>{const nm=c.staffName||(STAFF.find(s=>s.id==c.code)||{}).name||CODE_NAME[c.code]||'';
         return `<tr><td>${nm}</td><td>${c.code}</td><td>${c.date}</td><td>${c.newIn||'—'}–${c.newOut||'—'}</td><td>${c.reason||''}${c.note?'（'+c.note+'）':''}</td>
@@ -2391,6 +2404,19 @@ CHANGELOG V61
 - SHIFTPLAN の日別予定に clinic を保持し、実勤務クリニック判定に使うようにした。
 - STAFF_META を拡張し、シフト管理アプリ由来の給与上所属・勤務可能クリニック情報を保持する。
 - アプリ表示バージョンを V60 から V61 に更新。
+-->
+<!--
+CHANGELOG V62
+- シフト管理アプリから届く打刻修正申請 timecardCorrections を欠勤判定ルールに組み込んだ。
+- 予定シフトあり＋打刻なし＋有給承認あり → 有給。
+- 予定シフトあり＋打刻なし＋休み承認あり → 休み。
+- 予定シフトあり＋打刻なし＋休診設定あり → 欠勤ではない。
+- 予定シフトあり＋打刻なし＋打刻修正申請中 → 欠勤疑いではなく「修正申請中」。
+- 予定シフトあり＋打刻なし＋何もなし → 欠勤疑い。
+- 予定シフトなし＋打刻なし → 何もなし。
+- aggregateMonthRows の欠勤回数計算で、修正申請中のものを欠勤に数えないように変更。
+- decideCorrection を async function に修正し、承認/却下時のクラウド書き戻しがJavaScript構文エラーにならないようにした。
+- アプリ表示バージョンを V61 から V62 に更新。
 -->
 </body>
 </html>
