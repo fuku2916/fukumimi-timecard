@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>クリニック タイムカード V49</title>
+<title>クリニック タイムカード V50</title>
 <style>
   :root{
     --bg:#10402c; --panel:#ffffff; --ink:#1f2a24; --muted:#6b7c72;
@@ -157,7 +157,7 @@
 <header class="app">
   <h1>
     <span class="brandlogo" id="brandLogo" title="iPad打刻画面に戻る"><span class="mark">🏥</span><span class="org">福耳会</span></span>
-    <span class="apptitle">クリニック タイムカード<span class="ver">V49</span></span>
+    <span class="apptitle">クリニック タイムカード<span class="ver">V50</span></span>
   </h1>
   <div class="roles">
     <button data-role="ipad" class="active">iPad打刻</button>
@@ -1712,9 +1712,9 @@ function renderCalMonth(){
   }
   wrap.innerHTML=`
     <div class="cal-head">
-      <button class="cal-nav" onclick="calShift(-1)">‹</button>
-      <button class="cal-nav" onclick="calShift(1)">›</button>
-      <span class="mtitle">${calM}<small>${calY}年 / ${LOCATIONS.find(l=>l.id===curLoc).name}</small></span>
+      <button class="cal-nav" onclick="calShift(-1)" aria-label="前月へ">‹</button>
+      <span class="mtitle">${calY}年${calM}月<small>${LOCATIONS.find(l=>l.id===curLoc).name}</small></span>
+      <button class="cal-nav" onclick="calShift(1)" aria-label="翌月へ">›</button>
     </div>
     <div class="cal-grid">
       ${dow.map((d,i)=>`<div class="dow${i===0?' sun':i===6?' sat':''}">${d}</div>`).join('')}
@@ -1904,5 +1904,12 @@ setInterval(tickClock,1000);tickClock();
 
 loadState();fillLoc();setRole('ipad');
 </script>
+<!--
+CHANGELOG V50
+- 管理画面「診療カレンダー」の月表示を「月のみ」から「YYYY年M月」に変更。
+- カレンダー見出しを「‹ 2026年7月 ›」のように、左右矢印の間に年月が入る表示へ変更。
+- クリニック名は年月の下に小さく表示。
+- アプリ表示バージョンを V49 から V50 に更新。
+-->
 </body>
 </html>
