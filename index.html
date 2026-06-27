@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>クリニック タイムカード V58</title>
+<title>クリニック タイムカード V59</title>
 <style>
   :root{
     --bg:#10402c; --panel:#ffffff; --ink:#1f2a24; --muted:#6b7c72;
@@ -78,6 +78,13 @@
   .pill.late{background:#fef3c7;color:#92400e}
   .pill.over{background:#ffe4e6;color:#9f1239}
   .pill.dev{background:#fee2e2;color:#991b1b}
+  .pill.warn{background:#fef3c7;color:#92400e}
+  .lawbox{border-radius:10px;padding:8px 10px;font-weight:800;display:inline-block;min-width:78px;text-align:right}
+  .lawbox.ok{background:#dcfce7;color:#166534}
+  .lawbox.warn{background:#fef3c7;color:#92400e}
+  .lawbox.over{background:#fee2e2;color:#991b1b}
+  .lawrow.over td{background:#fff1f2}
+  .lawrow.warn td{background:#fffbeb}
   .pill.closed{background:#e0e7ff;color:#3730a3}
   .tile.closed{border-style:dashed;border-color:#a5b4fc;background:#eef2ff}
   .tile.closed .badge.off{background:#e0e7ff;color:#3730a3}
@@ -163,7 +170,7 @@
 <header class="app">
   <h1>
     <span class="brandlogo" id="brandLogo" title="iPad打刻画面に戻る"><span class="mark">🏥</span><span class="org">福耳会</span></span>
-    <span class="apptitle">クリニック タイムカード<span class="ver">V58</span></span>
+    <span class="apptitle">クリニック タイムカード<span class="ver">V59</span></span>
   </h1>
   <div class="roles">
     <button data-role="ipad" class="active">iPad打刻</button>
@@ -1053,6 +1060,108 @@ function legalFlags(s){
   return f;
 }
 
+function parseDateLocal(d){return new Date(d+'T00:00');}
+function dateYMD(dt){return `${dt.getFullYear()}-${pad2(dt.getMonth()+1)}-${pad2(dt.getDate())}`;}
+function addDays(dt,n){const x=new Date(dt);x.setDate(x.getDate()+n);return x;}
+function mondayOfDate(dt){const x=new Date(dt);const dow=x.getDay();const back=(dow+6)%7;x.setDate(x.getDate()-back);return x;}
+function weeklyLabel(start){return `${start.getMonth()+1}/${start.getDate()}〜${addDays(start,6).getMonth()+1}/${addDays(start,6).getDate()}`;}
+function legalClass(min){return min>2400?'over':min>=2280?'warn':'ok';} // 40h超=赤、38h以上=黄、それ未満=緑
+function legalText(min){return min>2400?'週40h超':min>=2280?'40h接近':'OK';}
+function plannedMinutesForShift(sh){
+  if(!sh||!sh.start||!sh.end)return 0;
+  const g=toMin(sh.end)-toMin(sh.start);
+  if(!g||g<=0)return 0;
+  return g-autoBreak(g);
+}
+function actualNetMinutesForLog(r){
+  if(!r||!r.in||!r.out)return 0;
+  const g=toMin(r.out)-toMin(r.in);
+  if(!g||g<=0)return 0;
+  return g-autoBreak(g);
+}
+function weeklyLegalRows(ym){
+  const people=displayRoster();
+  const rows=[];
+  const weeks={};
+  const addToWeek=(date,code,name,kind,min)=>{
+    if(!date||!String(date).startsWith(ym)||!min)return;
+    const st=mondayOfDate(parseDateLocal(date));
+    const wk=dateYMD(st);
+    weeks[wk]=weeks[wk]||{};
+    const key=String(code);
+    weeks[wk][key]=weeks[wk][key]||{code:key,name:name||CODE_NAME[key]||key,plan:0,actual:0,daysPlan:new Set(),daysActual:new Set()};
+    weeks[wk][key][kind]+=min;
+    weeks[wk][key][kind==='plan'?'daysPlan':'daysActual'].add(date);
+  };
+  people.forEach(s=>{
+    const code=s.id;
+    const name=s.name||CODE_NAME[code]||code;
+    const plan=SHIFTPLAN[code]||{};
+    Object.entries(plan).forEach(([date,sh])=>{
+      if(LEAVEPLAN[code]&&LEAVEPLAN[code][date])return;
+      if(isClosedDay(date)||closureFor(s,date))return;
+      addToWeek(date,code,name,'plan',plannedMinutesForShift(sh));
+    });
+    const log=PUNCHLOG[code]||{};
+    Object.entries(log).forEach(([date,r])=>addToWeek(date,code,name,'actual',actualNetMinutesForLog(r)));
+  });
+  Object.entries(weeks).forEach(([wk,obj])=>{
+    Object.values(obj).forEach(x=>{
+      rows.push({
+        weekStart:wk,
+        weekLabel:weeklyLabel(parseDateLocal(wk)),
+        code:x.code,
+        name:x.name,
+        plan:x.plan,
+        actual:x.actual,
+        daysPlan:x.daysPlan.size,
+        daysActual:x.daysActual.size,
+        cls:legalClass(Math.max(x.plan,x.actual)),
+        status:legalText(Math.max(x.plan,x.actual))
+      });
+    });
+  });
+  return rows.sort((a,b)=>a.weekStart.localeCompare(b.weekStart)||a.name.localeCompare(b.name,'ja'));
+}
+function weeklyLegalSummary(ym){
+  const rows=weeklyLegalRows(ym);
+  return {
+    rows,
+    over:rows.filter(r=>r.plan>2400||r.actual>2400).length,
+    warn:rows.filter(r=>!(r.plan>2400||r.actual>2400)&&(r.plan>=2280||r.actual>=2280)).length
+  };
+}
+function weeklyLegalHTML(ym){
+  const s=weeklyLegalSummary(ym);
+  if(!s.rows.length)return `<div class="note">週40時間チェック用の予定シフトまたは打刻データがまだありません。「シフトアプリからデータ取り込み」を実行してください。</div>`;
+  return `<div class="card" style="background:#f8fafc;margin:0 0 14px;padding:12px">
+    <div class="row" style="align-items:center;margin-bottom:8px">
+      <h2 style="font-size:14px;margin:0">週40時間チェック（${ym}）</h2>
+      <span class="pill over">40h超 ${s.over}件</span>
+      <span class="pill warn">38h以上 ${s.warn}件</span>
+      <span class="muted" style="margin-left:auto;font-size:12px">赤＝40時間超、黄＝38時間以上、緑＝問題なし</span>
+    </div>
+    <div style="overflow:auto;max-height:360px;border:1px solid var(--line);border-radius:8px;background:#fff">
+      <table style="font-size:12px">
+        <thead><tr>
+          <th>週</th><th>名前</th>
+          <th style="text-align:right">予定労働</th><th style="text-align:right">実労働</th>
+          <th style="text-align:right">予定日数</th><th style="text-align:right">打刻日数</th><th>判定</th>
+        </tr></thead>
+        <tbody>${s.rows.map(r=>`<tr class="lawrow ${r.cls}">
+          <td>${r.weekLabel}</td><td>${r.name}</td>
+          <td style="text-align:right"><span class="lawbox ${legalClass(r.plan)}">${fmtDur(r.plan)||'0:00'}</span></td>
+          <td style="text-align:right"><span class="lawbox ${legalClass(r.actual)}">${fmtDur(r.actual)||'0:00'}</span></td>
+          <td style="text-align:right">${r.daysPlan||''}</td><td style="text-align:right">${r.daysActual||''}</td>
+          <td><span class="pill ${r.cls==='over'?'over':r.cls==='warn'?'warn':'ok'}">${r.status}</span></td>
+        </tr>`).join('')}</tbody>
+      </table>
+    </div>
+    <div class="note">予定労働はシフト管理アプリ由来の予定開始〜終了から自動休憩を引いた時間、実労働は打刻の入退室から自動休憩を引いた時間です。月境界の週は、このアプリに保持されている対象月内データで判定します。</div>
+  </div>`;
+}
+
+
 // 診察終了中央値（同枠の退勤）と逸脱者
 function medianBySlot(){
   const slots={};
@@ -1474,6 +1583,8 @@ function refreshAdminKpi(){
   $('#adPending').textContent=pend;
   const badge=$('#apprCount');if(badge){badge.textContent=pend;badge.style.display=pend?'inline-block':'none';}
   let al=0;locStaff().forEach(s=>al+=legalFlags(s).length);
+  const wl=weeklyLegalSummary(DEMO_MONTH);
+  al += wl.over + wl.warn;
   $('#adAlert').textContent=al;
   const md=medianBySlot();let dev=0;for(const k in md)dev+=md[k].dev.length;
   $('#adDev').textContent=dev;
@@ -1503,10 +1614,14 @@ function kpiDetail(type){
       <p class="muted" style="font-size:12px">※ スタッフからの打刻修正申告は「申請の承認」タブで確認・承認します。</p>`
       :'<p class="muted">未承認の申請はありません。</p>';
   }else if(type==='alert'){
-    const list=locStaff().map(s=>({s,f:legalFlags(s)})).filter(x=>x.f.length);
-    title=`法定アラート（${list.reduce((n,x)=>n+x.f.length,0)}件）`;
-    body=list.length?`<table><thead><tr><th>氏名</th><th>内容</th></tr></thead><tbody>${
-      list.map(x=>`<tr><td>${x.s.name}</td><td>${x.f.map(f=>`<span class="pill over">${f}</span>`).join(' ')}</td></tr>`).join('')}</tbody></table>`
+    const daily=locStaff().map(s=>({s,f:legalFlags(s)})).filter(x=>x.f.length);
+    const weekly=weeklyLegalRows(DEMO_MONTH).filter(r=>r.plan>=2280||r.actual>=2280);
+    title=`法定アラート（日次${daily.reduce((n,x)=>n+x.f.length,0)}件・週次${weekly.length}件）`;
+    body=(daily.length||weekly.length)?`
+      ${daily.length?`<h2 style="font-size:14px;margin:0 0 6px">日次アラート</h2><table><thead><tr><th>氏名</th><th>内容</th></tr></thead><tbody>${
+        daily.map(x=>`<tr><td>${x.s.name}</td><td>${x.f.map(f=>`<span class="pill over">${f}</span>`).join(' ')}</td></tr>`).join('')}</tbody></table>`:''}
+      ${weekly.length?`<h2 style="font-size:14px;margin:14px 0 6px">週40時間チェック</h2><table><thead><tr><th>週</th><th>氏名</th><th style="text-align:right">予定</th><th style="text-align:right">実績</th><th>判定</th></tr></thead><tbody>${
+        weekly.map(r=>`<tr class="lawrow ${r.cls}"><td>${r.weekLabel}</td><td>${r.name}</td><td style="text-align:right">${fmtDur(r.plan)||'0:00'}</td><td style="text-align:right">${fmtDur(r.actual)||'0:00'}</td><td><span class="pill ${r.cls==='over'?'over':'warn'}">${r.status}</span></td></tr>`).join('')}</tbody></table>`:''}`
       :'<p class="muted">法定アラートはありません。</p>';
   }else if(type==='dev'){
     const md=medianBySlot();
@@ -1612,7 +1727,9 @@ function renderAdminPane(tab){
     sel.onchange=()=>renderWorkPane(sel.value);
     renderWorkPane(sel.value);
   }else if(tab==='diff'){
-    p.innerHTML=`<p class="muted" style="margin:0 0 8px">本日の打刻から自動計算した勤怠です（税理士CSVの該当列に対応）。夜診察＝割増対象時間帯 ${NIGHT_BAND?`<b>${NIGHT_BAND.s}–${NIGHT_BAND.e}</b>`:'<b>未設定</b>'}（「診察時間の設定」で変更）。</p>
+    p.innerHTML=`<p class="muted" style="margin:0 0 8px">シフト管理アプリから取り込んだ予定シフトと、タイムカード上の打刻データを突合します。週40時間チェックは予定労働・実労働の両方を自動判定します。</p>
+    ${weeklyLegalHTML(DEMO_MONTH)}
+    <p class="muted" style="margin:0 0 8px">本日の打刻から自動計算した勤怠です（税理士CSVの該当列に対応）。夜診察＝割増対象時間帯 ${NIGHT_BAND?`<b>${NIGHT_BAND.s}–${NIGHT_BAND.e}</b>`:'<b>未設定</b>'}（「診察時間の設定」で変更）。</p>
     <div style="overflow:auto"><table><thead><tr>
       <th>名前</th><th>枠</th><th>シフト</th><th>実打刻</th>
       <th style="text-align:right">実労働</th><th style="text-align:right">休憩(自動)</th>
@@ -1636,7 +1753,7 @@ function renderAdminPane(tab){
       <td style="text-align:right;color:#94a3b8">0:00</td>
       <td>${d.tags.map(t=>`<span class="pill ${t.c}">${t.t}</span>`).join(' ')}</td>
     </tr>`;}).join('')}</tbody></table></div>
-    <div class="note">実労働時間＝入退室−自動休憩（6h超45分/8h超60分）。法定残業＝実労働が1日8時間を超えた分（赤字）。夜診察＝「診察時間の設定」で決めた割増対象時間帯に働いた時間（金額は扱いません）。実深夜は当院では常に0です。診療カレンダーで休診の人は集計対象外（無断欠勤になりません）。</div>`;
+    <div class="note">実労働時間＝入退室−自動休憩（6h超45分/8h超60分）。法定残業＝実労働が1日8時間を超えた分（赤字）。週40時間チェックは上段で自動集計します。赤＝40時間超、黄＝38時間以上で注意、緑＝問題なし。夜診察＝「診察時間の設定」で決めた割増対象時間帯に働いた時間（金額は扱いません）。実深夜は当院では常に0です。診療カレンダーで休診の人は集計対象外（無断欠勤になりません）。</div>`;
   }else if(tab==='appr'){
     const ps=REQUESTS.filter(r=>r.status==='pending');
     const corr=allCorrections().filter(c=>(c.status||'pending')==='pending');
@@ -2192,6 +2309,16 @@ CHANGELOG V58
 - 管理者パスワード変更時も同じ正規化を行い、保存されるパスワードを半角化するようにした。
 - 既存保存済みの管理者パスワードも読み込み時に正規化するようにした。
 - アプリ表示バージョンを V57 から V58 に更新。
+-->
+<!--
+CHANGELOG V59
+- 管理者画面「シフト差異 / 法定」タブに、週40時間チェックを追加。
+- 予定労働時間と実労働時間を週単位で自動集計し、40時間超を赤、38時間以上を黄、問題なしを緑で表示。
+- 予定労働はシフト管理アプリ由来の SHIFTPLAN の開始・終了から自動休憩を引いて算出。
+- 実労働はタイムカードの PUNCHLOG の入退室から自動休憩を引いて算出。
+- ダッシュボードの「法定アラート」に、日次8時間超だけでなく週40時間超・接近アラートも加算。
+- 法定アラートの詳細モーダルに、週40時間チェックの対象者一覧を追加。
+- アプリ表示バージョンを V58 から V59 に更新。
 -->
 </body>
 </html>
