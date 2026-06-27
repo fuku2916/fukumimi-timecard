@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>クリニック タイムカード V59</title>
+<title>クリニック タイムカード V60</title>
 <style>
   :root{
     --bg:#10402c; --panel:#ffffff; --ink:#1f2a24; --muted:#6b7c72;
@@ -170,7 +170,7 @@
 <header class="app">
   <h1>
     <span class="brandlogo" id="brandLogo" title="iPad打刻画面に戻る"><span class="mark">🏥</span><span class="org">福耳会</span></span>
-    <span class="apptitle">クリニック タイムカード<span class="ver">V59</span></span>
+    <span class="apptitle">クリニック タイムカード<span class="ver">V60</span></span>
   </h1>
   <div class="roles">
     <button data-role="ipad" class="active">iPad打刻</button>
@@ -319,6 +319,7 @@ const LEAVE = {"0001002": {"grant": 15.0, "used": 2.0}, "0001004": {"grant": 0, 
 
 let curRole='ipad', curLoc='ekimae', curStaff=STAFF[0].id;
 let csvSource='calc'; // CSVタブの表示ソース: 'calc'=打刻集計(当月) / 'upload'=アップロード実績
+let csvClinicFilter='all'; // CSVタブのクリニック絞り込み: all / ekimae / iguchi / karasuma / demachi
 const TOL=5; // 許容±5分
 
 /* ===== アイコンの個人カスタマイズ ===== */
@@ -1801,7 +1802,9 @@ function renderAdminPane(tab){
       </tr>`;}).join('')}</tbody></table>`;
   }else if(tab==='csv'){
     const labels={'2026-05':'2026年5月','2026-01':'2026年1月'};
-    const rows = csvSource==='calc' ? aggregateMonthRows(DEMO_MONTH) : MONTHLY_ROWS;
+    const allRows = csvSource==='calc' ? aggregateMonthRows(DEMO_MONTH) : MONTHLY_ROWS;
+    const rows = filterCSVRowsByClinic(allRows,csvClinicFilter);
+    const clinicOptions = CSV_CLINIC_OPTIONS.map(o=>`<option value="${o.id}" ${csvClinicFilter===o.id?'selected':''}>${o.label}</option>`).join('');
     const calcCols=new Set([3,5,6,7,8,9,10,12,14,17]); // 打刻から自動計算する列（強調）
     p.innerHTML=`
     <div class="row" style="align-items:flex-end;margin-bottom:8px">
@@ -1810,11 +1813,12 @@ function renderAdminPane(tab){
         <option value="upload" ${csvSource==='upload'?'selected':''}>アップロード実績（過去月）</option>
       </select></label>
       ${csvSource==='upload'?`<label>対象月<br><select class="f" id="monthSel">${MONTH_KEYS.map(m=>`<option value="${m}" ${m===curMonth?'selected':''}>${labels[m]||m}</option>`).join('')}</select></label>`:''}
-      <button class="btn" id="csvMonthBtn" style="margin-left:auto">📤 税理士提出CSVを書き出し（全${rows.length}名）</button>
+      <label>表示クリニック<br><select class="f" id="clinicFilterSel">${clinicOptions}</select></label>
+      <button class="btn" id="csvMonthBtn" style="margin-left:auto">📤 税理士提出CSVを書き出し（${csvClinicLabelById(csvClinicFilter)}・${rows.length}名）</button>
     </div>
     <div class="note">${csvSource==='calc'
-      ? `各スタッフの<b>1か月分の打刻ログ</b>（${DEMO_MONTH}）を集計し、税理士フォーマット18列に反映したものです。<b>実働日数・遅刻/早退回数・実労働時間・休憩時間・遅刻/早退時間・実残業時間・有休日数・夜診察勤務</b>を打刻から自動計算しています（強調列）。実シフト外労働・実深夜・月末有休残・有休時間は打刻からは算出せず空欄です。<br>※ デモのため当月の打刻は自動生成。iPad打刻すると当日分が上書き反映されます。`
-      : `アップロードいただいた実績CSVをそのまま表示・出力します（元ファイルとバイト一致）。`}</div>
+      ? `各スタッフの<b>1か月分の打刻ログ</b>（${DEMO_MONTH}）を集計し、税理士フォーマット18列に反映したものです。<b>実働日数・遅刻/早退回数・実労働時間・休憩時間・遅刻/早退時間・実残業時間・有休日数・夜診察勤務</b>を打刻から自動計算しています（強調列）。現在の表示: <b>${csvClinicLabelById(csvClinicFilter)}</b>（${rows.length}/${allRows.length}名）。実シフト外労働・実深夜・月末有休残・有休時間は打刻からは算出せず空欄です。<br>※ デモのため当月の打刻は自動生成。iPad打刻すると当日分が上書き反映されます。`
+      : `アップロードいただいた実績CSVを表示・出力します。現在の表示: <b>${csvClinicLabelById(csvClinicFilter)}</b>（${rows.length}/${allRows.length}名）。`}</div>
     <div style="overflow:auto;margin-top:10px;border:1px solid var(--line);border-radius:8px;max-height:520px">
       <table style="font-size:11px">
         <thead><tr>${CSV_HEADER.map((h,i)=>`<th style="white-space:nowrap;position:sticky;top:0;background:#f8fafc;${i<3?'':'text-align:right'}${csvSource==='calc'&&calcCols.has(i)?';color:#1d4ed8':''}">${h}</th>`).join('')}</tr></thead>
@@ -1822,6 +1826,7 @@ function renderAdminPane(tab){
       </table>
     </div>`;
     $('#srcSel').onchange=e=>{csvSource=e.target.value;renderAdmin();};
+    const cf=$('#clinicFilterSel');if(cf)cf.onchange=e=>{csvClinicFilter=e.target.value;renderAdmin();};
     const ms=$('#monthSel');if(ms)ms.onchange=e=>setMonth(e.target.value);
     $('#csvMonthBtn').onclick=exportMonthlyCSV;
   }else if(tab==='shift'){
@@ -2149,13 +2154,41 @@ function writeCSVFile(dataRows,name){
   const blob=new Blob([csv],{type:'text/csv;charset=utf-8'});const url=URL.createObjectURL(blob);
   const a=document.createElement('a');a.href=url;a.download=name;a.click();URL.revokeObjectURL(url);
 }
+const CSV_CLINIC_OPTIONS=[
+  {id:'all',label:'全表示',file:'全クリニック'},
+  {id:'ekimae',label:'駅前クリニック',file:'駅前クリニック'},
+  {id:'iguchi',label:'いぐちクリニック',file:'いぐちクリニック'},
+  {id:'karasuma',label:'みずたにクリニック',file:'みずたにクリニック'},
+  {id:'demachi',label:'こどもクリニック',file:'こどもクリニック'}
+];
+function csvClinicNameById(id){
+  if(id==='all')return '';
+  const loc=LOCATIONS.find(l=>l.id===id);
+  return loc?loc.name:'';
+}
+function csvClinicLabelById(id){
+  const x=CSV_CLINIC_OPTIONS.find(o=>o.id===id);
+  return x?x.label:'全表示';
+}
+function csvClinicFileById(id){
+  const x=CSV_CLINIC_OPTIONS.find(o=>o.id===id);
+  return x?x.file:'全クリニック';
+}
+function filterCSVRowsByClinic(rows,clinicId){
+  if(clinicId==='all')return rows;
+  const nm=csvClinicNameById(clinicId);
+  return (rows||[]).filter(r=>String(r[2]||'')===nm);
+}
 function exportMonthlyCSV(){
+  const clinicFile=csvClinicFileById(csvClinicFilter);
   if(csvSource==='calc'){
-    writeCSVFile(aggregateMonthRows(DEMO_MONTH),`勤務データ_打刻集計_${DEMO_MONTH}.csv`);
-    toast(`打刻集計CSV（${DEMO_MONTH}・全${STAFF.length}名）を書き出しました`);return;
+    const rows=filterCSVRowsByClinic(aggregateMonthRows(DEMO_MONTH),csvClinicFilter);
+    writeCSVFile(rows,`勤務データ_打刻集計_${DEMO_MONTH}_${clinicFile}.csv`);
+    toast(`打刻集計CSV（${DEMO_MONTH}・${csvClinicLabelById(csvClinicFilter)}・${rows.length}名）を書き出しました`);return;
   }
-  writeCSVFile(MONTHLY_ROWS,`勤務データ_${curMonth}.csv`);
-  toast(`提出CSV（全${MONTHLY_ROWS.length}名）を書き出しました`);
+  const rows=filterCSVRowsByClinic(MONTHLY_ROWS,csvClinicFilter);
+  writeCSVFile(rows,`勤務データ_${curMonth}_${clinicFile}.csv`);
+  toast(`提出CSV（${csvClinicLabelById(csvClinicFilter)}・${rows.length}名）を書き出しました`);
 }
 
 /* ============ 共通：切替・初期化 ============ */
@@ -2319,6 +2352,15 @@ CHANGELOG V59
 - ダッシュボードの「法定アラート」に、日次8時間超だけでなく週40時間超・接近アラートも加算。
 - 法定アラートの詳細モーダルに、週40時間チェックの対象者一覧を追加。
 - アプリ表示バージョンを V58 から V59 に更新。
+-->
+<!--
+CHANGELOG V60
+- 管理者画面「税理士提出データ / CSV」に、クリニック別フィルターを追加。
+- 選択肢は「全表示」「駅前クリニック」「いぐちクリニック」「みずたにクリニック」「こどもクリニック」の5つ。
+- 画面表示だけでなく、CSV書き出しも選択中のクリニックに絞り込むように変更。
+- 書き出しファイル名にも選択中のクリニック名を付与。
+- 打刻集計（当月・自動）とアップロード実績（過去月）の両方で同じフィルターを利用可能。
+- アプリ表示バージョンを V59 から V60 に更新。
 -->
 </body>
 </html>
