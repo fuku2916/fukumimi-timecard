@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>クリニック タイムカード V53</title>
+<title>クリニック タイムカード V54</title>
 <style>
   :root{
     --bg:#10402c; --panel:#ffffff; --ink:#1f2a24; --muted:#6b7c72;
@@ -161,7 +161,7 @@
 <header class="app">
   <h1>
     <span class="brandlogo" id="brandLogo" title="iPad打刻画面に戻る"><span class="mark">🏥</span><span class="org">福耳会</span></span>
-    <span class="apptitle">クリニック タイムカード<span class="ver">V53</span></span>
+    <span class="apptitle">クリニック タイムカード<span class="ver">V54</span></span>
   </h1>
   <div class="roles">
     <button data-role="ipad" class="active">iPad打刻</button>
@@ -338,6 +338,7 @@ let DAYSLOTS={};
 let SLOT_STAFF={};   // date -> slotId -> [code,...]（その枠に割り当てられた人）
 let CODE_UNIT={};    // code -> 'nurse'|'clerk'|'doctor'
 let DOC_ASSIGN={};   // date -> slotId -> [医師名,...]（ドクター職種の割り当て。給与コードが無くても表示する＝麻酔科パート等）
+let WEEKLY_SLOTS={}; // dow(0-6) -> [{id,label,s,e,type}]（シフトアプリの診療枠。診療日表示の基準）
 let CANCELLED={};
 function isCancelled(date,slotId){return !!(CANCELLED[date]&&CANCELLED[date][slotId]);}
 function toggleCancel(date,slotId){
@@ -346,26 +347,51 @@ function toggleCancel(date,slotId){
   saveState();renderCalMonth();renderCalDetail();
 }
 // 取り込んだ予定(SHIFTPLAN)から、日付ごとの診療枠リストを構築
+function addDaySlot(date,id){
+  DAYSLOTS[date]=DAYSLOTS[date]||{};
+  if(!DAYSLOTS[date][id]){
+    const t=SLOTLIB[id]||{};
+    DAYSLOTS[date][id]={id,label:t.label||id,s:t.s||'',e:t.e||'',type:t.type||''};
+  }
+}
+// 取り込んだ予定(SHIFTPLAN)とシフトアプリ側の診療枠(slots)から、日付ごとの診療枠リストを構築
 function buildDaySlots(){
   DAYSLOTS={}; SLOT_STAFF={}; CODE_UNIT={};
   (IMPORT_STAFF||[]).forEach(s=>{if(s.unit)CODE_UNIT[s.id]=s.unit;}); // code→職種
+
+  // 1) シフトアプリの診療枠マスタから、その月の「診療日」を先に作る。
+  //    これにより、スタッフ割当がまだ無い日でも、診療枠がある曜日なら「診療日」と表示できる。
+  if(DEMO_MONTH&&Object.keys(WEEKLY_SLOTS||{}).length){
+    const parts=DEMO_MONTH.split('-').map(Number), yy=parts[0], mm=parts[1];
+    const last=new Date(yy,mm,0).getDate();
+    for(let d=1;d<=last;d++){
+      const date=`${DEMO_MONTH}-${pad2(d)}`;
+      if(SHIFT_CLOSED[date])continue; // シフトアプリで終日休診なら診療枠を作らない
+      const dow=new Date(yy,mm-1,d).getDay();
+      (WEEKLY_SLOTS[dow]||[]).forEach(sl=>addDaySlot(date,sl.id));
+    }
+  }
+
+  // 2) 実際の割当があるスタッフを記録する。
   Object.keys(SHIFTPLAN).forEach(code=>{
     Object.entries(SHIFTPLAN[code]).forEach(([date,sh])=>{
       (sh.slots||[]).forEach(id=>{
-        DAYSLOTS[date]=DAYSLOTS[date]||{};
-        if(!DAYSLOTS[date][id]){const t=SLOTLIB[id]||{};DAYSLOTS[date][id]={id,label:t.label||id,s:t.s||'',e:t.e||'',type:t.type||''};}
-        SLOT_STAFF[date]=SLOT_STAFF[date]||{}; (SLOT_STAFF[date][id]=SLOT_STAFF[date][id]||[]).push(code); // 割り当て記録
+        addDaySlot(date,id);
+        SLOT_STAFF[date]=SLOT_STAFF[date]||{};
+        (SLOT_STAFF[date][id]=SLOT_STAFF[date][id]||[]).push(code); // 割り当て記録
       });
     });
   });
-  // ドクター割り当てのある枠も追加（給与コードが無い麻酔科パート等で枠が消えないように）
+
+  // 3) ドクター割り当てのある枠も追加（給与コードが無い麻酔科パート等で枠が消えないように）
   Object.entries(DOC_ASSIGN).forEach(([date,slots])=>{
-    Object.keys(slots).forEach(id=>{
-      DAYSLOTS[date]=DAYSLOTS[date]||{};
-      if(!DAYSLOTS[date][id]){const t=SLOTLIB[id]||{};DAYSLOTS[date][id]={id,label:t.label||id,s:t.s||'',e:t.e||'',type:t.type||''};}
-    });
+    Object.keys(slots).forEach(id=>addDaySlot(date,id));
   });
-  Object.keys(DAYSLOTS).forEach(d=>{ if(Array.isArray(DAYSLOTS[d]))return; DAYSLOTS[d]=Object.values(DAYSLOTS[d]).sort((a,b)=>(a.s||'').localeCompare(b.s||''));});
+
+  Object.keys(DAYSLOTS).forEach(d=>{
+    if(Array.isArray(DAYSLOTS[d]))return;
+    DAYSLOTS[d]=Object.values(DAYSLOTS[d]).sort((a,b)=>(a.s||'').localeCompare(b.s||''));
+  });
 }
 function staffNameByCode(code){const s=(IMPORT_STAFF||[]).find(x=>x.id===code);return (s&&s.name)||CODE_NAME[code]||code;}
 function surnameOf(name){return String(name||'').split(/[\s　]/)[0];}  // 苗字だけ（半角/全角スペース対応）
@@ -408,7 +434,7 @@ let REQ_DATA={}; // requests_data.data 生データ（unit毎 {requests,avatars,
 function saveState(){
   try{
     const recs={};STAFF.forEach(s=>{if(s.rec)recs[s.id]=s.rec;});
-    localStorage.setItem('tc_state',JSON.stringify({requests:REQUESTS,recs,dayslots:DAYSLOTS,slotstaff:SLOT_STAFF,codeunit:CODE_UNIT,docassign:DOC_ASSIGN,cancelled:CANCELLED,closeddays:CLOSED_DAYS,shiftclosed:SHIFT_CLOSED,meta:STAFF_META,hidden:HIDDEN,phys:PHYS,importStaff:IMPORT_STAFF,punchlog:PUNCHLOG,shiftplan:SHIFTPLAN,leaveplan:LEAVEPLAN,nightBand:NIGHT_BAND,slotlib:SLOTLIB,demoMonth:DEMO_MONTH,importInfo:IMPORT_INFO,staffPin:STAFF_PIN,codeName:CODE_NAME,paid:PAID,editLog:EDIT_LOG,reqData:REQ_DATA}));
+    localStorage.setItem('tc_state',JSON.stringify({requests:REQUESTS,recs,dayslots:DAYSLOTS,weeklySlots:WEEKLY_SLOTS,slotstaff:SLOT_STAFF,codeunit:CODE_UNIT,docassign:DOC_ASSIGN,cancelled:CANCELLED,closeddays:CLOSED_DAYS,shiftclosed:SHIFT_CLOSED,meta:STAFF_META,hidden:HIDDEN,phys:PHYS,importStaff:IMPORT_STAFF,punchlog:PUNCHLOG,shiftplan:SHIFTPLAN,leaveplan:LEAVEPLAN,nightBand:NIGHT_BAND,slotlib:SLOTLIB,demoMonth:DEMO_MONTH,importInfo:IMPORT_INFO,staffPin:STAFF_PIN,codeName:CODE_NAME,paid:PAID,editLog:EDIT_LOG,reqData:REQ_DATA}));
   }catch(e){}
 }
 function loadState(){
@@ -418,6 +444,7 @@ function loadState(){
     if(Array.isArray(st.requests))REQUESTS=st.requests;
     if(st.recs)STAFF.forEach(s=>{if(st.recs[s.id])s.rec=st.recs[s.id];});
     if(st.dayslots)DAYSLOTS=st.dayslots;
+    if(st.weeklySlots)WEEKLY_SLOTS=st.weeklySlots;
     if(st.slotstaff)SLOT_STAFF=st.slotstaff;
     if(st.codeunit)CODE_UNIT=st.codeunit;
     if(st.docassign)DOC_ASSIGN=st.docassign;
@@ -526,11 +553,57 @@ async function sbLogin(pw){
   if(!r.ok||!d.access_token)throw new Error(d.error_description||'合言葉が違います');
   return d.access_token;
 }
-async function sbFetchShift(token){
-  const r=await fetch(SB_URL+'/rest/v1/shift_data?id=eq.main&select=data',
-    {headers:{apikey:SB_ANON,Authorization:'Bearer '+token}});
-  const rows=await r.json();const all=(rows[0]&&rows[0].data)||{};
+function currentShiftClinic(){
+  return ['ekimae','iguchi','karasuma'].includes(curLoc)?curLoc:'';
+}
+function mergeClinicShiftData(all){
+  all=all||{};
+  if(all.shared){
+    const shared=(all.shared&&typeof all.shared==='object')?all.shared:{};
+    return {
+      clerk:all.clerk?{...shared,...all.clerk}:null,
+      nurse:all.nurse?{...shared,...all.nurse}:null,
+      doctor:all.doctor?{...shared,...all.doctor}:null
+    };
+  }
   return {clerk:all.clerk||null,nurse:all.nurse||null,doctor:all.doctor||null};
+}
+async function sbFetchShift(token){
+  const clinic=currentShiftClinic();
+  const ids=clinic?[clinic,'main']:['main']; // まず現在選択中の院、だめなら旧mainへフォールバック
+  for(const rid of ids){
+    const r=await fetch(SB_URL+'/rest/v1/shift_data?id=eq.'+encodeURIComponent(rid)+'&select=data',
+      {headers:{apikey:SB_ANON,Authorization:'Bearer '+token}});
+    if(!r.ok)continue;
+    const rows=await r.json();
+    const all=(rows[0]&&rows[0].data)||null;
+    if(all)return mergeClinicShiftData(all);
+  }
+  return {clerk:null,nurse:null,doctor:null};
+}
+function loadShiftAppLocalWrapped(){
+  const clinic=currentShiftClinic();
+  const units=['clerk','nurse','doctor'];
+  const wrapped={clerk:null,nurse:null,doctor:null};
+  units.forEach(unit=>{
+    const keys=[];
+    if(clinic)keys.push('fukumimi_shift_v4_'+clinic+'_'+unit);
+    keys.push('fukumimi_shift_v4_'+unit); // legacy
+    for(const k of keys){
+      try{
+        const raw=localStorage.getItem(k);
+        if(!raw)continue;
+        const data=JSON.parse(raw);
+        if(data&&typeof data==='object'){wrapped[unit]=data;break;}
+      }catch(e){}
+    }
+  });
+  return (wrapped.clerk||wrapped.nurse||wrapped.doctor)?wrapped:null;
+}
+function localShiftAppImport(){
+  const wrapped=loadShiftAppLocalWrapped();
+  if(!wrapped)throw new Error('同一ブラウザ内にシフトアプリの端末データが見つかりません。先にシフト管理アプリを一度開いてください。');
+  return parseImport(wrapped);
 }
 async function cloudImport(pw){
   const t=await sbLogin(pw);
@@ -630,9 +703,17 @@ function resolveCode(st,idx){
   return{code:null,ok:false,reason:c&&c.length>1?'同姓が複数で特定不可':'該当なし（コード未付与）'};
 }
 function jobSlotTimes(job){
-  const m={};Object.values(job.slots||{}).forEach(arr=>(arr||[]).forEach(sl=>{
-    const p=(sl.time||'').split('-');if(p.length<2)return;
-    m[sl.id]={s:normHM(p[0]),e:normHM(p[1]),type:sl.type,label:sl.label};}));
+  const m={};
+  Object.entries(job.slots||{}).forEach(([dow,arr])=>{
+    (arr||[]).forEach(sl=>{
+      const p=(sl.time||'').split('-');if(p.length<2)return;
+      const obj={id:sl.id,s:normHM(p[0]),e:normHM(p[1]),type:sl.type,label:sl.label};
+      m[sl.id]=obj;
+      const d=Number(dow);
+      WEEKLY_SLOTS[d]=WEEKLY_SLOTS[d]||[];
+      if(!WEEKLY_SLOTS[d].some(x=>x.id===sl.id))WEEKLY_SLOTS[d].push(obj);
+    });
+  });
   return m;
 }
 function parseJob(job,jobName,idx,rep){
@@ -705,7 +786,7 @@ function purgeOtherMonths(){
   });
 }
 function parseImport(wrapped){
-  SHIFTPLAN={};LEAVEPLAN={};STAFF_PIN={};CODE_NAME={};PAID={};SLOTLIB={};IMPORT_STAFF=[];DOC_ASSIGN={};SHIFT_CLOSED={}; // NIGHT_BAND(割増時間帯)は管理者設定なので消さない
+  SHIFTPLAN={};LEAVEPLAN={};STAFF_PIN={};CODE_NAME={};PAID={};SLOTLIB={};WEEKLY_SLOTS={};IMPORT_STAFF=[];DOC_ASSIGN={};SHIFT_CLOSED={}; // NIGHT_BAND(割増時間帯)は管理者設定なので消さない
   const idx=rosterIndex();const rep=[];let ym=null;
   ['nurse','clerk','doctor'].forEach(jn=>{const job=wrapped[jn];if(!job)return;
     const r=parseJob(job,jn,idx,rep);if(r&&r.y&&r.m)ym=`${r.y}-${pad2(r.m)}`;});
@@ -1531,11 +1612,12 @@ function renderAdminPane(tab){
       <div class="row" style="align-items:flex-end">
         <label>合言葉<br><input type="password" id="sbPw" value="${pw}" placeholder="シフトアプリと同じ" style="width:200px"></label>
         <button class="btn" id="sbImport">☁ クラウドから取り込み</button>
+        <button class="btn ghost" id="localShiftImport">🌐 シフトアプリ端末データから取り込み</button>
         <span class="muted">または</span>
         <label class="btn ghost" style="cursor:pointer">📁 JSONファイルから取り込み<input type="file" id="fileImport" accept=".json,application/json" style="display:none"></label>
       </div>
       <div id="importResult" style="margin-top:14px">${importSummaryHTML()}</div>
-      <div class="note">クラウド取込が動かない場合（ブラウザのセキュリティ制限等）は、シフトアプリの「全データ保存」JSONを直接読み込めます。${IMPORT_INFO?'':'まだ取り込んでいません。'}</div>
+      <div class="note">クラウド取込が動かない場合は、同じブラウザで開いたシフトアプリの端末データ、またはシフトアプリの「全データ保存」JSONを読み込めます。${IMPORT_INFO?'':'まだ取り込んでいません。'}</div>
 
       <hr style="border:0;border-top:1px solid var(--line);margin:18px 0">
       <h2 style="font-size:14px;margin:0 0 6px">本人データのクラウド保存（スマホ閲覧用）</h2>
@@ -1555,6 +1637,10 @@ function renderAdminPane(tab){
       const btn=$('#sbImport');btn.textContent='取り込み中…';btn.disabled=true;
       try{const{ym}=await cloudImport(pwv);renderAdmin();toast(`シフト取り込み完了（${ym||'—'}）`);}
       catch(e){toast('取込失敗: '+e.message);btn.textContent='☁ クラウドから取り込み';btn.disabled=false;}
+    };
+    $('#localShiftImport').onclick=()=>{
+      try{const{ym}=localShiftAppImport();renderAdmin();toast(`シフトアプリ端末データを取り込みました（${ym||'—'}）`);}
+      catch(e){toast('端末データ取込失敗: '+e.message);}
     };
     $('#fileImport').onchange=ev=>{
       const f=ev.target.files[0];if(!f)return;const rd=new FileReader();
@@ -1863,12 +1949,20 @@ function setRole(r){
 let _autoRefreshing=false;
 function autoCloudRefresh(){
   const pw=localStorage.getItem('tc_shiftpw');
-  if(!pw||_autoRefreshing)return;
+  if(_autoRefreshing)return;
+  // 合言葉が無い場合でも、同一ブラウザ内のシフトアプリ端末データがあれば診療カレンダーへ反映する。
+  if(!pw){
+    try{ localShiftAppImport(); if(curRole==='admin')renderAdmin(); toast('シフトアプリ端末データを反映しました'); }catch(e){}
+    return;
+  }
   _autoRefreshing=true;
   toast('最新データをクラウドから取得中…');
   cloudImport(pw)
     .then(()=>{ if(curRole==='admin')renderAdmin(); toast('最新に更新しました'); })
-    .catch(e=>{ toast('クラウド取得に失敗（ローカル表示のまま）: '+e.message); })
+    .catch(e=>{
+      try{ localShiftAppImport(); if(curRole==='admin')renderAdmin(); toast('クラウド取得に失敗。端末データを反映しました'); }
+      catch(_){ toast('クラウド取得に失敗（ローカル表示のまま）: '+e.message); }
+    })
     .finally(()=>{ _autoRefreshing=false; });
 }
 $$('.roles button').forEach(b=>b.onclick=()=>setRole(b.dataset.role));
@@ -1935,6 +2029,17 @@ CHANGELOG V53
 - 表示順を「左矢印 → 年月 → 右矢印 → クリニック名」に変更。
 - 右矢印が「YYYY年M月」のすぐ右隣に来るよう修正。
 - アプリ表示バージョンを V53 に更新。
+-->
+<!--
+CHANGELOG V54
+- 診療カレンダーの「診療日」表示を、シフト管理アプリ側の診療枠情報から作るように変更。
+- シフト管理アプリ v136 のクリニックモードに対応し、shift_data の id=<clinic> 行（例: ekimae）を読めるようにした。
+- クリニックモードの data.shared にある slots / manualClosedDays を、nurse / clerk / doctor の各職種データへ合成して取り込むようにした。
+- 同一ブラウザ内にあるシフト管理アプリの端末保存データ localStorage（例: fukumimi_shift_v4_ekimae_nurse）からも取り込めるようにした。
+- 管理者画面に「シフトアプリ端末データから取り込み」ボタンを追加。
+- 取り込んだ weekly slots を WEEKLY_SLOTS として保持し、スタッフ割当が無い日でも、診療枠のある曜日は診療日として表示できるようにした。
+- manualClosedDays は SHIFT_CLOSED として取り込み、シフトアプリ側で休診になっている日は終日休診として扱う。
+- アプリ表示バージョンを V53 から V54 に更新。
 -->
 </body>
 </html>
