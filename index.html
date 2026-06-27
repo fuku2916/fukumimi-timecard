@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>クリニック タイムカード V57</title>
+<title>クリニック タイムカード V58</title>
 <style>
   :root{
     --bg:#10402c; --panel:#ffffff; --ink:#1f2a24; --muted:#6b7c72;
@@ -163,7 +163,7 @@
 <header class="app">
   <h1>
     <span class="brandlogo" id="brandLogo" title="iPad打刻画面に戻る"><span class="mark">🏥</span><span class="org">福耳会</span></span>
-    <span class="apptitle">クリニック タイムカード<span class="ver">V57</span></span>
+    <span class="apptitle">クリニック タイムカード<span class="ver">V58</span></span>
   </h1>
   <div class="roles">
     <button data-role="ipad" class="active">iPad打刻</button>
@@ -644,6 +644,13 @@ let EDIT_LOG=[];    // 打刻修正の監査ログ {at,by,code,name,date,field,f
 let staffAuthed=null; // 認証済みスタッフのcode（セッションのみ・保存しない）
 let ADMIN_PW=(function(){try{return localStorage.getItem('tc_adminpw')||'0000';}catch(e){return '0000';}})(); // 管理者パスワード（初期0000）
 let adminAuthed=false; // 管理者認証（セッションのみ・離脱で再ロック）
+function normalizePasswordInput(v){
+  return String(v||'')
+    .replace(/[！-～]/g,ch=>String.fromCharCode(ch.charCodeAt(0)-0xFEE0)) // 全角英数字・記号 → 半角
+    .replace(/　/g,' ')
+    .trim();
+}
+ADMIN_PW=normalizePasswordInput(ADMIN_PW);
 // 有給ヘルパー（残＝付与−取得。全休=1日, 半休=0.5日）
 function unitDays(u){u=String(u||'full');return /half|am|pm|0\.5|半/.test(u)?0.5:1;}
 function paidGranted(code){return PAID[code]?Number(PAID[code].granted)||0:null;}
@@ -1841,7 +1848,7 @@ function renderAdminPane(tab){
       <td><input type="number" min="0" style="width:90px" value="${s.desired||''}" onchange="setDesired('${s.id}',this.value)"></td>
     </tr>`;}).join('')}</tbody></table>
     <div class="note">法定付与は勤続6ヶ月で10日、以降1年ごとに加算（最大20日）。比例付与など細則は就業規則に合わせて設定します。</div>`;
-    $('#adminPwBtn').onclick=()=>{const v=$('#adminPwField').value.trim();if(!v){toast('新しいパスワードを入力してください');return;}ADMIN_PW=v;try{localStorage.setItem('tc_adminpw',v);}catch(e){}$('#adminPwField').value='';toast('管理者パスワードを変更しました');};
+    $('#adminPwBtn').onclick=()=>{const v=normalizePasswordInput($('#adminPwField').value);if(!v){toast('新しいパスワードを入力してください');return;}ADMIN_PW=v;try{localStorage.setItem('tc_adminpw',v);}catch(e){}$('#adminPwField').value='';toast('管理者パスワードを変更しました');};
     renderShowList();
   }
 }
@@ -2040,7 +2047,8 @@ function setRole(r){
   if(r==='admin'&&!adminAuthed){
     const pw=prompt('管理者パスワードを入力してください');
     if(pw===null)return;                 // キャンセル → 移動しない
-    if(pw!==ADMIN_PW){toast('パスワードが違います');return;}
+    const normalizedPw=normalizePasswordInput(pw);
+    if(normalizedPw!==ADMIN_PW){toast('パスワードが違います');return;}
     adminAuthed=true;
   }
   if(r!=='admin')adminAuthed=false;       // 管理者画面を離れたら再ロック
@@ -2176,6 +2184,14 @@ CHANGELOG V57
 - V56の手術枠集約に加えて、外来枠も同じ方針で表示を整理。
 - 内部の診療枠データ、スタッフ割当、詳細ペインの元データ、欠勤判定、CSV出力は変更していない。
 - アプリ表示バージョンを V56 から V57 に更新。
+-->
+<!--
+CHANGELOG V58
+- 管理者画面に入るときのパスワード入力で、全角英数字・全角記号を半角に正規化するように変更。
+- 例: 「１２３４」と入力しても内部では「1234」として判定する。
+- 管理者パスワード変更時も同じ正規化を行い、保存されるパスワードを半角化するようにした。
+- 既存保存済みの管理者パスワードも読み込み時に正規化するようにした。
+- アプリ表示バージョンを V57 から V58 に更新。
 -->
 </body>
 </html>
