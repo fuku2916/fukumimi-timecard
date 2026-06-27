@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>クリニック タイムカード V55</title>
+<title>クリニック タイムカード V56</title>
 <style>
   :root{
     --bg:#10402c; --panel:#ffffff; --ink:#1f2a24; --muted:#6b7c72;
@@ -163,7 +163,7 @@
 <header class="app">
   <h1>
     <span class="brandlogo" id="brandLogo" title="iPad打刻画面に戻る"><span class="mark">🏥</span><span class="org">福耳会</span></span>
-    <span class="apptitle">クリニック タイムカード<span class="ver">V55</span></span>
+    <span class="apptitle">クリニック タイムカード<span class="ver">V56</span></span>
   </h1>
   <div class="roles">
     <button data-role="ipad" class="active">iPad打刻</button>
@@ -402,13 +402,32 @@ function outpatientMarkForSlot(date,slot,dayClosed=false){
   }
   return parts.join('');
 }
+function surgeryLabelForSlot(slot){
+  const p=surgeryPeriodForSlot(slot);
+  if(p==='am')return '午前手術';
+  if(p==='pm')return '午後手術';
+  return (slot&&slot.label)||'手術';
+}
 function calendarSlotMark(date,slot,dayClosed=false){
-  if(isOutpatientSlot(slot))return {cls:'outpt',text:(slot.label||slot.id)+'　'+outpatientMarkForSlot(date,slot,dayClosed)};
-  if(slot&&slot.type==='surg')return {cls:'surg',text:(slot.label||slot.id)+'　'+surgeryMarkForSlot(date,slot)};
-  return {cls:'doc',text:(slot.label||slot.id)};
+  if(isOutpatientSlot(slot))return {cls:'outpt',key:'out:'+((slot&&slot.id)||''),text:(slot.label||slot.id)+'　'+outpatientMarkForSlot(date,slot,dayClosed)};
+  if(slot&&slot.type==='surg'){
+    const p=surgeryPeriodForSlot(slot)||'unknown';
+    const label=surgeryLabelForSlot(slot);
+    return {cls:'surg',key:'surg:'+p,text:label+'　'+surgeryMarkForSlot(date,slot)};
+  }
+  return {cls:'doc',key:'other:'+((slot&&slot.id)||''),text:(slot.label||slot.id)};
 }
 function calendarSlotMarksHTML(date,dayClosed=false){
-  const list=(DAYSLOTS[date]||[]).map(sl=>calendarSlotMark(date,sl,dayClosed)).filter(x=>x&&x.text);
+  const raw=(DAYSLOTS[date]||[]).map(sl=>calendarSlotMark(date,sl,dayClosed)).filter(x=>x&&x.text);
+  const list=[];
+  const seen=new Set();
+  raw.forEach(x=>{
+    // 同じ時間帯の手術枠は、カレンダーセル内では1行に集約する。
+    // 例: pm_surg1 / pm_surg2 のような複数枠があっても「午後手術 ⭕️」は1回だけ表示。
+    if(seen.has(x.key))return;
+    seen.add(x.key);
+    list.push(x);
+  });
   if(!list.length)return '';
   const shown=list.slice(0,5).map(x=>`<span class="mk ${x.cls}">${x.text}</span>`).join('');
   return shown+(list.length>5?`<span class="mk">+${list.length-5}</span>`:'');
@@ -2127,6 +2146,14 @@ CHANGELOG V55
 - 詳細ペインにも「外来/手術」列を追加し、日付セルと同じ予定状態を確認できるようにした。
 - カレンダーセルの高さを広げ、複数の診療枠が読めるようにした。
 - アプリ表示バージョンを V54 から V55 に更新。
+-->
+<!--
+CHANGELOG V56
+- 診療カレンダーの日付セルで、午後手術が複数回表示される問題を修正。
+- 原因: シフト管理アプリ側に午後手術に相当する手術枠が複数存在し、タイムカード側が各枠をそのまま1行ずつ表示していたため。
+- カレンダーセル内では、手術枠を午前/午後単位で集約し、「午前手術」「午後手術」はそれぞれ1日1回だけ表示するように変更。
+- 内部の診療枠データ、スタッフ割当、詳細ペインの元データは変更せず、カレンダーセルの表示だけを整理。
+- アプリ表示バージョンを V55 から V56 に更新。
 -->
 </body>
 </html>
