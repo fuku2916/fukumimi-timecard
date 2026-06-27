@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>クリニック タイムカード V50</title>
+<title>クリニック タイムカード V51</title>
 <style>
   :root{
     --bg:#10402c; --panel:#ffffff; --ink:#1f2a24; --muted:#6b7c72;
@@ -100,10 +100,13 @@
   .cal-layout{display:flex;gap:18px;flex-wrap:wrap;align-items:flex-start}
   .cal-month{flex:1 1 460px;min-width:320px}
   .cal-detail{flex:1 1 300px;min-width:260px}
-  .cal-head{display:flex;align-items:center;gap:10px;margin-bottom:10px}
-  .cal-head .mtitle{font-size:26px;font-weight:800;line-height:1}
-  .cal-head .mtitle small{font-size:13px;font-weight:600;color:var(--muted);margin-left:6px}
-  .cal-nav{border:1px solid var(--line);background:#fff;border-radius:8px;width:34px;height:34px;font-size:16px;cursor:pointer}
+  .cal-head{display:flex;align-items:center;gap:8px;margin-bottom:10px;flex-wrap:wrap}
+  .cal-head .mtitle{font-size:26px;font-weight:800;line-height:1;display:flex;align-items:baseline;gap:8px}
+  .cal-head .mtitle small{font-size:13px;font-weight:600;color:var(--muted);margin-left:0}
+  .cal-title-row{display:flex;align-items:center;gap:12px}
+  .cal-nav{border:2px solid #d9e4dd;background:#fff;border-radius:14px;width:56px;height:56px;font-size:34px;font-weight:900;line-height:1;cursor:pointer;color:var(--ink);display:inline-flex;align-items:center;justify-content:center;box-shadow:0 2px 4px rgba(0,0,0,.06);transition:.12s}
+  .cal-nav:hover{background:#f3f8f5;border-color:var(--brand);color:var(--brand-d);transform:translateY(-1px)}
+  .cal-nav:active{transform:scale(.96);background:#e8f3ed}
   .cal-grid{display:grid;grid-template-columns:repeat(7,1fr);border-left:1px solid var(--line);border-top:1px solid var(--line)}
   .cal-grid .dow{font-size:12px;font-weight:700;padding:6px 4px;text-align:left;border-right:1px solid var(--line);border-bottom:1px solid var(--line);background:#f8fafc}
   .dow.sun{color:#dc2626}.dow.sat{color:#2563eb}
@@ -157,7 +160,7 @@
 <header class="app">
   <h1>
     <span class="brandlogo" id="brandLogo" title="iPad打刻画面に戻る"><span class="mark">🏥</span><span class="org">福耳会</span></span>
-    <span class="apptitle">クリニック タイムカード<span class="ver">V50</span></span>
+    <span class="apptitle">クリニック タイムカード<span class="ver">V51</span></span>
   </h1>
   <div class="roles">
     <button data-role="ipad" class="active">iPad打刻</button>
@@ -1910,6 +1913,14 @@ CHANGELOG V50
 - カレンダー見出しを「‹ 2026年7月 ›」のように、左右矢印の間に年月が入る表示へ変更。
 - クリニック名は年月の下に小さく表示。
 - アプリ表示バージョンを V49 から V50 に更新。
+-->
+<!--
+CHANGELOG V51
+- 管理画面「診療カレンダー」の月移動矢印を、年月表示のすぐ左隣・右隣に配置。
+- 矢印ボタンを 34px から 56px に拡大し、押せるボタンであることがわかりやすい見た目に変更。
+- 矢印のフォントサイズを大きくし、hover / active 時の視覚的フィードバックを追加。
+- クリニック名は年月切替ボタン群とは分離して、同じヘッダー内に小さく表示。
+- アプリ表示バージョンを V50 から V51 に更新。
 -->
 </body>
 </html>
