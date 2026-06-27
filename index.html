@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>クリニック タイムカード V62</title>
+<title>クリニック タイムカード V63</title>
 <style>
   :root{
     --bg:#10402c; --panel:#ffffff; --ink:#1f2a24; --muted:#6b7c72;
@@ -170,7 +170,7 @@
 <header class="app">
   <h1>
     <span class="brandlogo" id="brandLogo" title="iPad打刻画面に戻る"><span class="mark">🏥</span><span class="org">福耳会</span></span>
-    <span class="apptitle">クリニック タイムカード<span class="ver">V62</span></span>
+    <span class="apptitle">クリニック タイムカード<span class="ver">V63</span></span>
   </h1>
   <div class="roles">
     <button data-role="ipad" class="active">iPad打刻</button>
@@ -1675,6 +1675,21 @@ function renderAdmin(){
   refreshAdminKpi();
   renderAdminPane($('#adminTabs button.active').dataset.t);
 }
+function requestedAdminTab(){
+  try{
+    const sp=new URLSearchParams(location.search);
+    return sp.get('tab')||sp.get('adminTab')||'';
+  }catch(e){return '';}
+}
+function activateAdminTab(t){
+  if(!t)return;
+  const btn=$(`#adminTabs button[data-t="${t}"]`);
+  if(!btn)return;
+  $$('#adminTabs button').forEach(x=>x.classList.remove('active'));
+  btn.classList.add('active');
+  renderAdminPane(t);
+}
+
 /* 管理者：各人の勤務状況の確認・打刻修正・アイコン設定 */
 function setWorkPunch(code,date,field,val){
   PUNCHLOG[code]=PUNCHLOG[code]||{};
@@ -2243,7 +2258,7 @@ function setRole(r){
   $('#view-'+r).classList.add('active');
   if(r==='ipad')renderIpad();
   if(r==='staff'){fillStaffSelect();renderStaff();}
-  if(r==='admin'){renderAdmin();autoCloudRefresh();}
+  if(r==='admin'){renderAdmin();autoCloudRefresh();setTimeout(()=>activateAdminTab(requestedAdminTab()),80);}
 }
 // 管理者画面に入ったら、合言葉があれば自動でクラウド取り込み（常に最新表示）
 let _autoRefreshing=false;
@@ -2303,7 +2318,12 @@ $('#locSel').onchange=e=>{curLoc=e.target.value;setRole(curRole);};
 function tickClock(){const d=new Date();$('#clock').textContent=d.toLocaleString('ja-JP',{month:'2-digit',day:'2-digit',weekday:'short',hour:'2-digit',minute:'2-digit',second:'2-digit'});}
 setInterval(tickClock,1000);tickClock();
 
-loadState();fillLoc();setRole('ipad');
+loadState();fillLoc();
+try{
+  const sp=new URLSearchParams(location.search);
+  if(sp.get('admin')==='1'||sp.get('role')==='admin')setRole('admin');
+  else setRole('ipad');
+}catch(e){setRole('ipad');}
 </script>
 <!--
 CHANGELOG V50
@@ -2417,6 +2437,13 @@ CHANGELOG V62
 - aggregateMonthRows の欠勤回数計算で、修正申請中のものを欠勤に数えないように変更。
 - decideCorrection を async function に修正し、承認/却下時のクラウド書き戻しがJavaScript構文エラーにならないようにした。
 - アプリ表示バージョンを V61 から V62 に更新。
+-->
+<!--
+CHANGELOG V63
+- シフト管理アプリの打刻修正一覧から、タイムカードアプリの管理画面・申請承認タブを開けるようにした。
+- URLパラメータ ?admin=1&tab=appr を受け取ると、管理者パスワード確認後に「申請の承認」タブへ切り替える。
+- 管理者認証自体は従来通り維持し、自動ログインや権限回避は行わない。
+- アプリ表示バージョンを V62 から V63 に更新。
 -->
 </body>
 </html>
