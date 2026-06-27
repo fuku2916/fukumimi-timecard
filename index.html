@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>クリニック タイムカード V63</title>
+<title>クリニック タイムカード V64</title>
 <style>
   :root{
     --bg:#10402c; --panel:#ffffff; --ink:#1f2a24; --muted:#6b7c72;
@@ -170,7 +170,7 @@
 <header class="app">
   <h1>
     <span class="brandlogo" id="brandLogo" title="iPad打刻画面に戻る"><span class="mark">🏥</span><span class="org">福耳会</span></span>
-    <span class="apptitle">クリニック タイムカード<span class="ver">V63</span></span>
+    <span class="apptitle">クリニック タイムカード<span class="ver">V64</span></span>
   </h1>
   <div class="roles">
     <button data-role="ipad" class="active">iPad打刻</button>
@@ -646,6 +646,15 @@ function calcDaily(s){
 // PUNCHLOG[staffId][YYYY-MM-DD] = {in,out}
 let PUNCHLOG={};
 function logPunch(s){PUNCHLOG[s.id]=PUNCHLOG[s.id]||{};PUNCHLOG[s.id][today]={in:s.rec.in,out:s.rec.out};}
+function refreshTodayPunchRecords(){
+  // 画面表示用の s.rec は、必ず本日の PUNCHLOG から作り直す。
+  // 初期デモデータに入っている rec:{in:'08:58',out:null} 等を勤務中判定に使わない。
+  STAFF.forEach(s=>{
+    const r=PUNCHLOG[s.id]&&PUNCHLOG[s.id][today];
+    s.rec=r?{in:r.in||null,out:r.out||null}:{in:null,out:null};
+  });
+}
+
 let DEMO_MONTH=today.slice(0,7); // 集計対象月（取込で上書きされる）
 function pad2(n){return String(n).padStart(2,'0');}
 function fmtDur(min){if(!min||min<=0)return '';return `${Math.floor(min/60)}:${pad2(min%60)}`;}
@@ -953,6 +962,7 @@ function parseImport(wrapped){
   purgeOtherMonths();   // 取込月以外の旧デモ打刻を消す
   seedPunchFromPlan();
   IMPORT_INFO={at:new Date().toISOString(),month:ym,report:rep};
+  refreshTodayPunchRecords();
   saveAvatarPref(); // 取り込んだアイコン設定を保存
   saveState();
   return {ym,rep};
@@ -1272,6 +1282,7 @@ function fitPoolHeight(pool){
   pool.style.height=h+'px';
 }
 function renderIpad(){
+  refreshTodayPunchRecords();
   const pool=$('#marblePool'); if(!pool)return;
   fitPoolHeight(pool);
   const list=punchList(); // 取り込み済みなら登録者全員（拠点で分けない）／未取込は内蔵名簿
@@ -1612,6 +1623,7 @@ const statusLabel=s=>({pending:'承認待ち',approved:'承認済',rejected:'却
 
 /* ============ 描画：管理者 ============ */
 function refreshAdminKpi(){
+  refreshTodayPunchRecords();
   const working=locStaff().filter(s=>s.rec&&s.rec.in&&!s.rec.out).length;
   $('#adWorking').textContent=working;
   const pend=REQUESTS.filter(r=>r.status==='pending').length;
@@ -2318,7 +2330,7 @@ $('#locSel').onchange=e=>{curLoc=e.target.value;setRole(curRole);};
 function tickClock(){const d=new Date();$('#clock').textContent=d.toLocaleString('ja-JP',{month:'2-digit',day:'2-digit',weekday:'short',hour:'2-digit',minute:'2-digit',second:'2-digit'});}
 setInterval(tickClock,1000);tickClock();
 
-loadState();fillLoc();
+loadState();refreshTodayPunchRecords();fillLoc();
 try{
   const sp=new URLSearchParams(location.search);
   if(sp.get('admin')==='1'||sp.get('role')==='admin')setRole('admin');
@@ -2444,6 +2456,15 @@ CHANGELOG V63
 - URLパラメータ ?admin=1&tab=appr を受け取ると、管理者パスワード確認後に「申請の承認」タブへ切り替える。
 - 管理者認証自体は従来通り維持し、自動ログインや権限回避は行わない。
 - アプリ表示バージョンを V62 から V63 に更新。
+-->
+<!--
+CHANGELOG V64
+- iPad打刻/管理者ダッシュボードで、誰も出勤していないのに「勤務中」が表示される問題を修正。
+- 原因: 初期デモ用 STAFF データ内に rec:{in:'08:58', out:null} のような勤務中サンプルが残っており、PUNCHLOGに本日の打刻がない場合でも s.rec が勤務中扱いになっていたため。
+- refreshTodayPunchRecords() を追加し、画面表示用の s.rec を必ず本日の PUNCHLOG から再構築するようにした。
+- PUNCHLOG[today] がなければ s.rec は {in:null,out:null} とし、初期デモ rec を勤務中判定に使わない。
+- 起動時、シフト取込後、iPad画面描画時、管理者KPI更新時に refreshTodayPunchRecords() を呼ぶようにした。
+- アプリ表示バージョンを V63 から V64 に更新。
 -->
 </body>
 </html>
