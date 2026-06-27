@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>クリニック タイムカード V64</title>
+<title>クリニック タイムカード V65</title>
 <style>
   :root{
     --bg:#10402c; --panel:#ffffff; --ink:#1f2a24; --muted:#6b7c72;
@@ -170,7 +170,7 @@
 <header class="app">
   <h1>
     <span class="brandlogo" id="brandLogo" title="iPad打刻画面に戻る"><span class="mark">🏥</span><span class="org">福耳会</span></span>
-    <span class="apptitle">クリニック タイムカード<span class="ver">V64</span></span>
+    <span class="apptitle">クリニック タイムカード<span class="ver">V65</span></span>
   </h1>
   <div class="roles">
     <button data-role="ipad" class="active">iPad打刻</button>
@@ -308,11 +308,7 @@ function hm(s){return s} // helper passthrough
 let STAFF = [{"id": "0001002", "name": "大滝 雅子", "loc": "ekimae", "slot": "夜外来", "shift": {"s": "13:00", "e": "22:00"}, "rec": {"in": "08:58", "out": null}}, {"id": "0001004", "name": "小島 憲", "loc": "iguchi", "slot": "午前外来", "shift": {"s": "09:00", "e": "18:00"}, "rec": {"in": "09:05", "out": null}}, {"id": "0001012", "name": "山地 かえ子", "loc": "iguchi", "slot": "午前外来", "shift": {"s": "09:00", "e": "18:00"}, "rec": {"in": "08:50", "out": "18:10"}}, {"id": "0001015", "name": "高野 篤子", "loc": "iguchi", "slot": "午前外来", "shift": {"s": "09:00", "e": "18:00"}, "rec": {"in": null, "out": null}}, {"id": "0001020", "name": "水鳥 和美", "loc": "iguchi", "slot": "午前外来", "shift": {"s": "09:00", "e": "18:00"}, "rec": {"in": "08:58", "out": null}}, {"id": "0001021", "name": "宮城 喜代子", "loc": "iguchi", "slot": "午前外来", "shift": {"s": "09:00", "e": "18:00"}, "rec": {"in": "09:05", "out": null}}, {"id": "0001031", "name": "伊藤 壽一", "loc": "iguchi", "slot": "午前外来", "shift": {"s": "09:00", "e": "18:00"}, "rec": {"in": "08:50", "out": "18:10"}}, {"id": "0001036", "name": "中川 茉耶", "loc": "ekimae", "slot": "午前外来", "shift": {"s": "09:00", "e": "18:00"}, "rec": {"in": null, "out": null}}, {"id": "0001041", "name": "芳賀 ゆき", "loc": "iguchi", "slot": "夜外来", "shift": {"s": "13:00", "e": "22:00"}, "rec": {"in": "08:58", "out": null}}, {"id": "0001075", "name": "吉田 美帆", "loc": "ekimae", "slot": "午前外来", "shift": {"s": "09:00", "e": "18:00"}, "rec": {"in": "09:05", "out": null}}, {"id": "0001123", "name": "竹内 万理恵", "loc": "iguchi", "slot": "午前外来", "shift": {"s": "09:00", "e": "18:00"}, "rec": {"in": "08:50", "out": "18:10"}}, {"id": "0001124", "name": "森 亜弓", "loc": "iguchi", "slot": "午前外来", "shift": {"s": "09:00", "e": "18:00"}, "rec": {"in": null, "out": null}}, {"id": "0001125", "name": "藤田 琴恵", "loc": "ekimae", "slot": "午前外来", "shift": {"s": "09:00", "e": "18:00"}, "rec": {"in": "08:58", "out": null}}, {"id": "0001127", "name": "藤井 あおい", "loc": "iguchi", "slot": "午前外来", "shift": {"s": "09:00", "e": "18:00"}, "rec": {"in": "09:05", "out": null}}, {"id": "0001133", "name": "小形 知恵子", "loc": "iguchi", "slot": "午前外来", "shift": {"s": "09:00", "e": "18:00"}, "rec": {"in": "08:50", "out": "18:10"}}, {"id": "0001134", "name": "小池 陽子", "loc": "ekimae", "slot": "午前外来", "shift": {"s": "09:00", "e": "18:00"}, "rec": {"in": null, "out": null}}, {"id": "0001142", "name": "藤井 ひな乃", "loc": "ekimae", "slot": "午前外来", "shift": {"s": "09:00", "e": "18:00"}, "rec": {"in": "08:58", "out": null}}, {"id": "0001150", "name": "山本 さゆり", "loc": "ekimae", "slot": "午前外来", "shift": {"s": "09:00", "e": "18:00"}, "rec": {"in": "09:05", "out": null}}, {"id": "0001157", "name": "伊藤 有美", "loc": "demachi", "slot": "午前外来", "shift": {"s": "09:00", "e": "18:00"}, "rec": {"in": "08:50", "out": "18:10"}}, {"id": "0001164", "name": "松原 由歩", "loc": "ekimae", "slot": "午前外来", "shift": {"s": "09:00", "e": "18:00"}, "rec": {"in": null, "out": null}}, {"id": "0001165", "name": "菅 早知子", "loc": "ekimae", "slot": "午前外来", "shift": {"s": "09:00", "e": "18:00"}, "rec": {"in": "08:58", "out": null}}, {"id": "0001167", "name": "勝本 暢子", "loc": "ekimae", "slot": "午前外来", "shift": {"s": "09:00", "e": "18:00"}, "rec": {"in": "09:05", "out": null}}, {"id": "0001169", "name": "橋口 弘美", "loc": "ekimae", "slot": "午前外来", "shift": {"s": "09:00", "e": "18:00"}, "rec": {"in": "08:50", "out": "18:10"}}, {"id": "0001174", "name": "西條 美和", "loc": "karasuma", "slot": "午前外来", "shift": {"s": "09:00", "e": "18:00"}, "rec": {"in": null, "out": null}}, {"id": "0001181", "name": "西本 仁", "loc": "ekimae", "slot": "午前外来", "shift": {"s": "09:00", "e": "18:00"}, "rec": {"in": "08:58", "out": null}}, {"id": "0001182", "name": "小出 有紗", "loc": "iguchi", "slot": "午前外来", "shift": {"s": "09:00", "e": "18:00"}, "rec": {"in": "09:05", "out": null}}, {"id": "0001187", "name": "古川 央樹", "loc": "demachi", "slot": "午前外来", "shift": {"s": "09:00", "e": "18:00"}, "rec": {"in": "08:50", "out": "18:10"}}, {"id": "0001189", "name": "伊藤 英介", "loc": "demachi", "slot": "午前外来", "shift": {"s": "09:00", "e": "18:00"}, "rec": {"in": null, "out": null}}, {"id": "0001190", "name": "森岡 依子", "loc": "demachi", "slot": "午前外来", "shift": {"s": "09:00", "e": "18:00"}, "rec": {"in": "08:58", "out": null}}, {"id": "0001191", "name": "山本 正仁", "loc": "demachi", "slot": "午前外来", "shift": {"s": "09:00", "e": "18:00"}, "rec": {"in": "09:05", "out": null}}, {"id": "0001192", "name": "山本 明代", "loc": "demachi", "slot": "午前外来", "shift": {"s": "09:00", "e": "18:00"}, "rec": {"in": "08:50", "out": "18:10"}}, {"id": "0001193", "name": "矢野 文季子", "loc": "ekimae", "slot": "午前外来", "shift": {"s": "09:00", "e": "18:00"}, "rec": {"in": null, "out": null}}, {"id": "0001194", "name": "松枝 知美", "loc": "ekimae", "slot": "夜外来", "shift": {"s": "13:00", "e": "22:00"}, "rec": {"in": "08:58", "out": null}}, {"id": "0001195", "name": "大門 寿美代", "loc": "demachi", "slot": "午前外来", "shift": {"s": "09:00", "e": "18:00"}, "rec": {"in": "09:05", "out": null}}, {"id": "0001199", "name": "丸岡 詩織", "loc": "demachi", "slot": "午前外来", "shift": {"s": "09:00", "e": "18:00"}, "rec": {"in": "08:50", "out": "18:10"}}, {"id": "0001202", "name": "小村 綾子", "loc": "iguchi", "slot": "午前外来", "shift": {"s": "09:00", "e": "18:00"}, "rec": {"in": null, "out": null}}, {"id": "0001205", "name": "加藤 日菜子", "loc": "ekimae", "slot": "夜外来", "shift": {"s": "13:00", "e": "22:00"}, "rec": {"in": "08:58", "out": null}}, {"id": "0001209", "name": "鈴木 直子", "loc": "karasuma", "slot": "午前外来", "shift": {"s": "09:00", "e": "18:00"}, "rec": {"in": "09:05", "out": null}}, {"id": "0001211", "name": "井上 圭", "loc": "karasuma", "slot": "午前外来", "shift": {"s": "09:00", "e": "18:00"}, "rec": {"in": "08:50", "out": "18:10"}}, {"id": "0001217", "name": "久保野 鞠子", "loc": "iguchi", "slot": "午前外来", "shift": {"s": "09:00", "e": "18:00"}, "rec": {"in": null, "out": null}}, {"id": "0001218", "name": "杉本 京子", "loc": "ekimae", "slot": "午前外来", "shift": {"s": "09:00", "e": "18:00"}, "rec": {"in": "08:58", "out": null}}, {"id": "0001219", "name": "永井 咲羽", "loc": "ekimae", "slot": "夜外来", "shift": {"s": "13:00", "e": "22:00"}, "rec": {"in": "09:05", "out": null}}, {"id": "0001220", "name": "北尾 茉衣", "loc": "ekimae", "slot": "夜外来", "shift": {"s": "13:00", "e": "22:00"}, "rec": {"in": "08:50", "out": "18:10"}}, {"id": "0001221", "name": "藤田 正子", "loc": "karasuma", "slot": "午前外来", "shift": {"s": "09:00", "e": "18:00"}, "rec": {"in": null, "out": null}}, {"id": "0001222", "name": "岐美 裕子", "loc": "karasuma", "slot": "午前外来", "shift": {"s": "09:00", "e": "18:00"}, "rec": {"in": "08:58", "out": null}}, {"id": "0001223", "name": "舟見 恵子", "loc": "iguchi", "slot": "午前外来", "shift": {"s": "09:00", "e": "18:00"}, "rec": {"in": "09:05", "out": null}}, {"id": "0001224", "name": "北口 彩奈", "loc": "ekimae", "slot": "午前外来", "shift": {"s": "09:00", "e": "18:00"}, "rec": {"in": "08:50", "out": "18:10"}}, {"id": "0001225", "name": "仲川 真希", "loc": "ekimae", "slot": "夜外来", "shift": {"s": "13:00", "e": "22:00"}, "rec": {"in": null, "out": null}}, {"id": "0001227", "name": "小田 なつみ", "loc": "ekimae", "slot": "夜外来", "shift": {"s": "13:00", "e": "22:00"}, "rec": {"in": "08:58", "out": null}}, {"id": "0001228", "name": "川江 清子", "loc": "iguchi", "slot": "午前外来", "shift": {"s": "09:00", "e": "18:00"}, "rec": {"in": "09:05", "out": null}}, {"id": "0001229", "name": "米澤 佳絵", "loc": "karasuma", "slot": "午前外来", "shift": {"s": "09:00", "e": "18:00"}, "rec": {"in": "08:50", "out": "18:10"}}, {"id": "0001231", "name": "大江 健吾", "loc": "ekimae", "slot": "午前外来", "shift": {"s": "09:00", "e": "18:00"}, "rec": {"in": null, "out": null}}];
 
 // 申請（有給・残業・修正）
-let REQUESTS = [
-  {id:101, staff:'0001002', type:'leave',     date:'2026-06-20', detail:'全休（私用）', status:'pending'},
-  {id:102, staff:'0001015', type:'overtime',  date:today,        detail:'院長依頼で残業1.5h', status:'pending'},
-  {id:103, staff:'0001036', type:'correction',date:today,        detail:'打刻忘れ→出勤9:00に修正希望', status:'pending'},
-];
+let REQUESTS = []; // 実運用では初期デモ申請を表示しない。申請はスタッフ/シフト管理アプリから入る。
 
 // 有給残（簡易）
 const LEAVE = {"0001002": {"grant": 15.0, "used": 2.0}, "0001004": {"grant": 0, "used": 0}, "0001012": {"grant": 28.5, "used": 0}, "0001015": {"grant": 29.5, "used": 1.0}, "0001020": {"grant": 37.0, "used": 0}, "0001021": {"grant": 28.5, "used": 0}, "0001031": {"grant": 0, "used": 0}, "0001036": {"grant": 30.5, "used": 1.0}, "0001041": {"grant": 16.0, "used": 1.0}, "0001075": {"grant": 13.0, "used": 0.5}, "0001123": {"grant": 0, "used": 0}, "0001124": {"grant": 17.0, "used": 0}, "0001125": {"grant": 0, "used": 0}, "0001127": {"grant": 8.0, "used": 0}, "0001133": {"grant": 14.0, "used": 0}, "0001134": {"grant": 18.5, "used": 0}, "0001142": {"grant": 10.5, "used": 1.0}, "0001150": {"grant": 0, "used": 0}, "0001157": {"grant": 15.0, "used": 0.5}, "0001164": {"grant": 0, "used": 0}, "0001165": {"grant": 0, "used": 0}, "0001167": {"grant": 8.5, "used": 0}, "0001169": {"grant": 9.0, "used": 1.0}, "0001174": {"grant": 5.0, "used": 0}, "0001181": {"grant": 13.0, "used": 1.0}, "0001182": {"grant": 5.0, "used": 0}, "0001187": {"grant": 0, "used": 0}, "0001189": {"grant": 0, "used": 0}, "0001190": {"grant": 0, "used": 0}, "0001191": {"grant": 0, "used": 0}, "0001192": {"grant": 0, "used": 0}, "0001193": {"grant": 6.5, "used": 0.5}, "0001194": {"grant": 4.0, "used": 0}, "0001195": {"grant": 0, "used": 0}, "0001199": {"grant": 0, "used": 0}, "0001202": {"grant": 0, "used": 0}, "0001205": {"grant": 10.0, "used": 10.0}, "0001209": {"grant": 10.0, "used": 0}, "0001211": {"grant": 10.0, "used": 0}, "0001217": {"grant": 0, "used": 0}, "0001218": {"grant": 0, "used": 0}, "0001219": {"grant": 0, "used": 0}, "0001220": {"grant": 0, "used": 0}, "0001221": {"grant": 0, "used": 0}, "0001222": {"grant": 0, "used": 0}, "0001223": {"grant": 0, "used": 0}, "0001224": {"grant": 0, "used": 0}, "0001225": {"grant": 0, "used": 0}, "0001227": {"grant": 0, "used": 0}, "0001228": {"grant": 0, "used": 0}, "0001229": {"grant": 0, "used": 0}, "0001231": {"grant": 0, "used": 0}};
@@ -552,7 +548,7 @@ function loadState(){
   try{
     const raw=localStorage.getItem('tc_state');if(!raw)return;
     const st=JSON.parse(raw);
-    if(Array.isArray(st.requests))REQUESTS=st.requests;
+    if(Array.isArray(st.requests))REQUESTS=sanitizeRequests(st.requests);
     if(st.recs)STAFF.forEach(s=>{if(st.recs[s.id])s.rec=st.recs[s.id];});
     if(st.dayslots)DAYSLOTS=st.dayslots;
     if(st.weeklySlots)WEEKLY_SLOTS=st.weeklySlots;
@@ -649,7 +645,11 @@ function logPunch(s){PUNCHLOG[s.id]=PUNCHLOG[s.id]||{};PUNCHLOG[s.id][today]={in
 function refreshTodayPunchRecords(){
   // 画面表示用の s.rec は、必ず本日の PUNCHLOG から作り直す。
   // 初期デモデータに入っている rec:{in:'08:58',out:null} 等を勤務中判定に使わない。
-  STAFF.forEach(s=>{
+  const list=[...STAFF,...(IMPORT_STAFF||[])];
+  const seen=new Set();
+  list.forEach(s=>{
+    if(!s||seen.has(String(s.id)))return;
+    seen.add(String(s.id));
     const r=PUNCHLOG[s.id]&&PUNCHLOG[s.id][today];
     s.rec=r?{in:r.in||null,out:r.out||null}:{in:null,out:null};
   });
@@ -786,6 +786,21 @@ function allCorrections(){
   ['clerk','nurse','doctor'].forEach(unit=>{const w=reqUnitWrap(unit);if(!w)return;
     (w.timecardCorrections||[]).forEach((c,idx)=>out.push(Object.assign({unit,idx},c)));});
   return out;
+}
+function pendingLocalRequests(){return REQUESTS.filter(r=>r.status==='pending');}
+function pendingCorrectionRequests(){return allCorrections().filter(c=>(c.status||'pending')==='pending');}
+function pendingApprovalCount(){return pendingLocalRequests().length+pendingCorrectionRequests().length;}
+function isDemoSeedRequest(r){
+  return r&&[101,102,103].includes(Number(r.id))&&['0001002','0001015','0001036'].includes(String(r.staff||''))&&
+    (String(r.detail||'').includes('私用')||String(r.detail||'').includes('院長依頼')||String(r.detail||'').includes('打刻忘れ→出勤9:00'));
+}
+function sanitizeRequests(arr){return (Array.isArray(arr)?arr:[]).filter(r=>!isDemoSeedRequest(r));}
+function dashboardStaff(){
+  refreshTodayPunchRecords();
+  return displayRoster().filter(s=>!isHidden(s.id)&&includeDateForClinic(s,today,curLoc)).map(s=>{
+    s.rec=(PUNCHLOG[s.id]&&PUNCHLOG[s.id][today])||{in:null,out:null};
+    return s;
+  });
 }
 function correctionFor(code,date,status){
   return allCorrections().find(c=>String(c.code)===String(code)&&String(c.date)===String(date)&&(!status||(c.status||'pending')===status));
@@ -1210,12 +1225,18 @@ function weeklyLegalHTML(ym){
 // 診察終了中央値（同枠の退勤）と逸脱者
 function medianBySlot(){
   const slots={};
-  locStaff().forEach(s=>{if(s.rec&&s.rec.out){(slots[s.slot]=slots[s.slot]||[]).push(s);}});
+  dashboardStaff().forEach(s=>{
+    if(!(s.rec&&s.rec.out))return;
+    const sh=SHIFTPLAN[s.id]&&SHIFTPLAN[s.id][today];
+    const key=(sh&&Array.isArray(sh.slots)&&sh.slots.length)?sh.slots.join('+'):(s.slot||'勤務枠');
+    (slots[key]=slots[key]||[]).push(s);
+  });
   const res={};
   for(const slot in slots){
-    const arr=slots[slot];const outs=arr.map(s=>toMin(s.rec.out)).sort((a,b)=>a-b);
+    const arr=slots[slot];const outs=arr.map(s=>toMin(s.rec.out)).filter(v=>v!=null).sort((a,b)=>a-b);
+    if(!outs.length)continue;
     const n=outs.length;const med=n%2?outs[(n-1)/2]:Math.round((outs[n/2-1]+outs[n/2])/2);
-    const dev=arr.filter(s=>toMin(s.rec.out)-med>=20);
+    const dev=arr.filter(s=>toMin(s.rec.out)!=null&&toMin(s.rec.out)-med>=20);
     res[slot]={med,members:arr,dev};
   }
   return res;
@@ -1623,13 +1644,13 @@ const statusLabel=s=>({pending:'承認待ち',approved:'承認済',rejected:'却
 
 /* ============ 描画：管理者 ============ */
 function refreshAdminKpi(){
-  refreshTodayPunchRecords();
-  const working=locStaff().filter(s=>s.rec&&s.rec.in&&!s.rec.out).length;
+  const ds=dashboardStaff();
+  const working=ds.filter(s=>s.rec&&s.rec.in&&!s.rec.out).length;
   $('#adWorking').textContent=working;
-  const pend=REQUESTS.filter(r=>r.status==='pending').length;
+  const pend=pendingApprovalCount();
   $('#adPending').textContent=pend;
   const badge=$('#apprCount');if(badge){badge.textContent=pend;badge.style.display=pend?'inline-block':'none';}
-  let al=0;locStaff().forEach(s=>al+=legalFlags(s).length);
+  let al=0;ds.forEach(s=>al+=legalFlags(s).length);
   const wl=weeklyLegalSummary(DEMO_MONTH);
   al += wl.over + wl.warn;
   $('#adAlert').textContent=al;
@@ -1648,20 +1669,24 @@ function openListModal(title,bodyHtml){
 function kpiDetail(type){
   let title='', body='';
   if(type==='working'){
-    const list=locStaff().filter(s=>s.rec&&s.rec.in&&!s.rec.out);
+    const list=dashboardStaff().filter(s=>s.rec&&s.rec.in&&!s.rec.out);
     title=`勤務中（${list.length}名）`;
     body=list.length?`<table><thead><tr><th>氏名</th><th>枠</th><th>出勤</th></tr></thead><tbody>${
       list.map(s=>`<tr><td>${s.name}</td><td>${s.slot||''}</td><td>${s.rec.in}</td></tr>`).join('')}</tbody></table>`
       :'<p class="muted">該当者はいません。</p>';
   }else if(type==='pending'){
-    const list=REQUESTS.filter(r=>r.status==='pending');
-    title=`未承認の申請（${list.length}件）`;
-    body=list.length?`<table><thead><tr><th>種別</th><th>氏名</th><th>日付</th><th>内容</th></tr></thead><tbody>${
-      list.map(r=>{const st=STAFF.find(s=>s.id==r.staff);return `<tr><td>${typeLabel(r.type)}</td><td>${st?st.name:''}</td><td>${r.date}</td><td>${r.detail||''}</td></tr>`;}).join('')}</tbody></table>
-      <p class="muted" style="font-size:12px">※ スタッフからの打刻修正申告は「申請の承認」タブで確認・承認します。</p>`
+    const local=pendingLocalRequests();
+    const corr=pendingCorrectionRequests();
+    title=`未承認の申請（${local.length+corr.length}件）`;
+    body=(local.length||corr.length)?`
+      ${corr.length?`<h2 style="font-size:14px;margin:0 0 6px">打刻修正申請</h2><table><thead><tr><th>氏名</th><th>コード</th><th>日付</th><th>内容</th></tr></thead><tbody>${
+        corr.map(c=>`<tr><td>${c.staffName||CODE_NAME[c.code]||''}</td><td>${c.code||''}</td><td>${c.date||''}</td><td>出 ${c.newIn||'—'} / 退 ${c.newOut||'—'} ${c.reason||''}${c.note?'（'+c.note+'）':''}</td></tr>`).join('')}</tbody></table>`:''}
+      ${local.length?`<h2 style="font-size:14px;margin:14px 0 6px">その他の申請</h2><table><thead><tr><th>種別</th><th>氏名</th><th>日付</th><th>内容</th></tr></thead><tbody>${
+        local.map(r=>{const st=STAFF.find(s=>s.id==r.staff);return `<tr><td>${typeLabel(r.type)}</td><td>${st?st.name:''}</td><td>${r.date}</td><td>${r.detail||''}</td></tr>`;}).join('')}</tbody></table>`:''}
+      <p class="muted" style="font-size:12px">※ 承認・却下は「申請の承認」タブで行います。</p>`
       :'<p class="muted">未承認の申請はありません。</p>';
   }else if(type==='alert'){
-    const daily=locStaff().map(s=>({s,f:legalFlags(s)})).filter(x=>x.f.length);
+    const daily=dashboardStaff().map(s=>({s,f:legalFlags(s)})).filter(x=>x.f.length);
     const weekly=weeklyLegalRows(DEMO_MONTH).filter(r=>r.plan>=2280||r.actual>=2280);
     title=`法定アラート（日次${daily.reduce((n,x)=>n+x.f.length,0)}件・週次${weekly.length}件）`;
     body=(daily.length||weekly.length)?`
@@ -1817,7 +1842,7 @@ function renderAdminPane(tab){
     </tr>`;}).join('')}</tbody></table></div>
     <div class="note">実労働時間＝入退室−自動休憩（6h超45分/8h超60分）。法定残業＝実労働が1日8時間を超えた分（赤字）。週40時間チェックは上段で自動集計します。赤＝40時間超、黄＝38時間以上で注意、緑＝問題なし。夜診察＝「診察時間の設定」で決めた割増対象時間帯に働いた時間（金額は扱いません）。実深夜は当院では常に0です。診療カレンダーで休診の人は集計対象外（無断欠勤になりません）。打刻修正申請中の未打刻は、承認/却下までは欠勤疑いではなく「修正申請中」として扱います。</div>`;
   }else if(tab==='appr'){
-    const ps=REQUESTS.filter(r=>r.status==='pending');
+    const ps=pendingLocalRequests();
     const corr=allCorrections().filter(c=>(c.status||'pending')==='pending');
     p.innerHTML=`
     <h2 style="font-size:14px;margin:0 0 6px">打刻修正の申告（シフト管理アプリのスタッフスマホ画面から）</h2>
@@ -2465,6 +2490,17 @@ CHANGELOG V64
 - PUNCHLOG[today] がなければ s.rec は {in:null,out:null} とし、初期デモ rec を勤務中判定に使わない。
 - 起動時、シフト取込後、iPad画面描画時、管理者KPI更新時に refreshTodayPunchRecords() を呼ぶようにした。
 - アプリ表示バージョンを V63 から V64 に更新。
+-->
+<!--
+CHANGELOG V65
+- 本日のダッシュボードの「未承認の申請」「法定アラート」「退勤時間の中央値からの逸脱」を点検し、集計元を修正。
+- 初期デモ申請3件が未承認申請として表示される問題を修正。REQUESTSの初期値を空配列に変更し、過去に保存されたデモ申請もsanitizeRequests()で除外。
+- 未承認の申請に、シフト管理アプリから届く打刻修正申請 timecardCorrections も含めるように変更。
+- 管理者タブの申請バッジも、その他申請＋打刻修正申請の合計件数に変更。
+- ダッシュボード集計用に dashboardStaff() を追加し、現在選択中のクリニック・本日のPUNCHLOGを基準に勤務中/日次法定/退勤中央値を判定。
+- refreshTodayPunchRecords() を IMPORT_STAFF にも対応させ、シフトアプリ取込後のスタッフでも本日の打刻状態が正しく反映されるようにした。
+- 退勤中央値は locStaff の固定サンプルではなく、dashboardStaff() と本日の SHIFTPLAN / PUNCHLOG を基準に計算するように変更。
+- アプリ表示バージョンを V64 から V65 に更新。
 -->
 </body>
 </html>
