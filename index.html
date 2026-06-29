@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>クリニック タイムカード V65</title>
+<title>クリニック タイムカード V66</title>
 <style>
   :root{
     --bg:#10402c; --panel:#ffffff; --ink:#1f2a24; --muted:#6b7c72;
@@ -170,7 +170,7 @@
 <header class="app">
   <h1>
     <span class="brandlogo" id="brandLogo" title="iPad打刻画面に戻る"><span class="mark">🏥</span><span class="org">福耳会</span></span>
-    <span class="apptitle">クリニック タイムカード<span class="ver">V65</span></span>
+    <span class="apptitle">クリニック タイムカード<span class="ver">V66</span></span>
   </h1>
   <div class="roles">
     <button data-role="ipad" class="active">iPad打刻</button>
@@ -381,6 +381,83 @@ function surgeryMarkForSlot(date,slot){
   if(!v)return 'ー';
   return v[p]?'⭕️':'ー';
 }
+
+// v66: シフト管理アプリ側で外来を1診/2診に分けた後も、タイムカード側では
+// 「午前外来」「昼外来」「夜外来」として集約表示する。
+// 旧ID(am_out/pm2等)が割当に残っていても、カレンダーに raw ID が出ないよう正規化する。
+const LEGACY_SLOT_INFO={
+  am_out:{label:'午前外来',s:'09:30',e:'13:00',type:'out'},
+  pm1:{label:'昼外来',s:'14:00',e:'16:00',type:'out'},
+  pm2:{label:'夜外来',s:'16:00',e:'19:30',type:'out'},
+  pm_out:{label:'夜外来',s:'16:00',e:'19:30',type:'out'},
+  am_surg:{label:'午前手術',s:'09:30',e:'13:00',type:'surg'},
+  pm_surg:{label:'午後手術',s:'13:00',e:'19:00',type:'surg'}
+};
+function normalizeSlotLabel(label,id){
+  let s=String(label||'').trim();
+  const legacy=LEGACY_SLOT_INFO[id];
+  if(!s||s===id) s=(legacy&&legacy.label)||s||id;
+  s=s.replace(/[ 　]*(?:1|１|一)診$/,'').replace(/[ 　]*(?:2|２|二)診$/,'').trim();
+  s=s.replace(/[ 　]+第?[１２12一二]診$/,'').trim();
+  return s;
+}
+function normalizeSlotObj(slot){
+  slot=slot||{};
+  const rawId=String(slot.id||'');
+  const baseId=String(slot.baseSlotId||rawId.replace(/_r[12]$/,''));
+  const legacy=LEGACY_SLOT_INFO[baseId]||LEGACY_SLOT_INFO[rawId]||{};
+  let label=normalizeSlotLabel(slot.label||legacy.label||rawId,baseId||rawId);
+  let type=slot.type||legacy.type||'';
+  let s=slot.s||legacy.s||'', e=slot.e||legacy.e||'';
+  if((!s||!e)&&slot.time){
+    const p=String(slot.time).split('-');
+    if(p.length>=2){s=normHM(p[0]);e=normHM(p[1]);}
+  }
+  if(!type){
+    if(label.indexOf('外来')>=0)type='out';
+    else if(label.indexOf('手術')>=0)type='surg';
+  }
+  return {...slot,id:rawId||baseId,baseSlotId:baseId,label,s,e,type};
+}
+function slotDisplayKey(slot){
+  const sl=normalizeSlotObj(slot);
+  if(sl.type==='out')return 'out:'+outpatientLabelKeyForSlot(sl);
+  if(sl.type==='surg')return 'surg:'+(surgeryPeriodForSlot(sl)||sl.label||sl.id);
+  return 'other:'+(sl.label||sl.id);
+}
+function displayDaySlots(date){
+  const groups={};
+  (DAYSLOTS[date]||[]).forEach(orig=>{
+    const sl=normalizeSlotObj(orig);
+    const key=slotDisplayKey(sl);
+    if(!groups[key]){
+      groups[key]={...sl,ids:[sl.id],_slots:[sl]};
+    }else{
+      groups[key].ids.push(sl.id);
+      groups[key]._slots.push(sl);
+      const ss=toMin(sl.s), gs=toMin(groups[key].s);
+      const ee=toMin(sl.e), ge=toMin(groups[key].e);
+      if(ss!=null&&(gs==null||ss<gs))groups[key].s=sl.s;
+      if(ee!=null&&(ge==null||ee>ge))groups[key].e=sl.e;
+    }
+  });
+  return Object.values(groups).sort((a,b)=>(a.s||'').localeCompare(b.s||''));
+}
+function isCancelledAny(date,slot){
+  const ids=(slot&&slot.ids)||[slot&&slot.id];
+  return ids.some(id=>isCancelled(date,id));
+}
+function toggleCancelGroup(date,idsCsv){
+  const ids=String(idsCsv||'').split(',').filter(Boolean);
+  if(!ids.length)return;
+  const nowCancelled=ids.some(id=>isCancelled(date,id));
+  CANCELLED[date]=CANCELLED[date]||{};
+  ids.forEach(id=>{
+    if(nowCancelled)delete CANCELLED[date][id];
+    else CANCELLED[date][id]=true;
+  });
+  saveState();renderCalMonth();renderCalDetail();
+}
 const CLINIC_ROOM_NUMS=['','⑴','⑵'];
 function isOutpatientSlot(slot){
   const label=(slot&&slot.label||'').toString();
@@ -422,6 +499,7 @@ function outpatientLabelKeyForSlot(slot){
   return label||id||'外来';
 }
 function calendarSlotMark(date,slot,dayClosed=false){
+  slot=normalizeSlotObj(slot);
   if(isOutpatientSlot(slot)){
     const label=outpatientLabelKeyForSlot(slot);
     return {cls:'outpt',key:'out:'+label,text:label+'　'+outpatientMarkForSlot(date,slot,dayClosed)};
@@ -434,7 +512,7 @@ function calendarSlotMark(date,slot,dayClosed=false){
   return {cls:'doc',key:'other:'+((slot&&slot.id)||''),text:(slot.label||slot.id)};
 }
 function calendarSlotMarksHTML(date,dayClosed=false){
-  const raw=(DAYSLOTS[date]||[]).map(sl=>calendarSlotMark(date,sl,dayClosed)).filter(x=>x&&x.text);
+  const raw=displayDaySlots(date).map(sl=>calendarSlotMark(date,sl,dayClosed)).filter(x=>x&&x.text);
   const list=[];
   const seen=new Set();
   raw.forEach(x=>{
@@ -450,6 +528,7 @@ function calendarSlotMarksHTML(date,dayClosed=false){
   return shown+(list.length>5?`<span class="mk">+${list.length-5}</span>`:'');
 }
 function slotStatusLabel(date,slot,dayClosed=false){
+  slot=normalizeSlotObj(slot);
   if(isOutpatientSlot(slot))return outpatientMarkForSlot(date,slot,dayClosed);
   if(slot&&slot.type==='surg')return surgeryMarkForSlot(date,slot);
   return '';
@@ -457,8 +536,8 @@ function slotStatusLabel(date,slot,dayClosed=false){
 function addDaySlot(date,id){
   DAYSLOTS[date]=DAYSLOTS[date]||{};
   if(!DAYSLOTS[date][id]){
-    const t=SLOTLIB[id]||{};
-    DAYSLOTS[date][id]={id,label:t.label||id,s:t.s||'',e:t.e||'',type:t.type||''};
+    const t=normalizeSlotObj(SLOTLIB[id]||{id});
+    DAYSLOTS[date][id]=t;
   }
 }
 // 取り込んだ予定(SHIFTPLAN)とシフトアプリ側の診療枠(slots)から、日付ごとの診療枠リストを構築
@@ -512,7 +591,7 @@ function doctorPillsFor(date,slotId){
 }
 // その日の休診枠ラベル一覧（カレンダー表示用）
 function closedCells(date){
-  return (DAYSLOTS[date]||[]).filter(sl=>isCancelled(date,sl.id)).map(sl=>({label:sl.label||sl.id}));
+  return displayDaySlots(date).filter(sl=>isCancelledAny(date,sl)).map(sl=>({label:sl.label||sl.id}));
 }
 // その人がその日に出勤不要（担当している診療枠が全て休診）か
 function closureFor(s,date){
@@ -576,6 +655,11 @@ function loadState(){
     if(st.paid)PAID=st.paid;
     if(Array.isArray(st.editLog))EDIT_LOG=st.editLog;
     if(st.reqData)REQ_DATA=st.reqData;
+    try{
+      Object.keys(SLOTLIB||{}).forEach(k=>{SLOTLIB[k]=normalizeSlotObj(SLOTLIB[k]);});
+      Object.keys(WEEKLY_SLOTS||{}).forEach(d=>{WEEKLY_SLOTS[d]=(WEEKLY_SLOTS[d]||[]).map(normalizeSlotObj);});
+      Object.keys(DAYSLOTS||{}).forEach(d=>{if(Array.isArray(DAYSLOTS[d]))DAYSLOTS[d]=DAYSLOTS[d].map(normalizeSlotObj);});
+    }catch(_){}
     applyMeta();
     if(IMPORT_INFO){purgeOtherMonths();saveState();} // 取込済みなら旧デモ打刻を掃除して保存
   }catch(e){}
@@ -879,7 +963,7 @@ function jobSlotTimes(job){
   Object.entries(job.slots||{}).forEach(([dow,arr])=>{
     (arr||[]).forEach(sl=>{
       const p=(sl.time||'').split('-');if(p.length<2)return;
-      const obj={id:sl.id,s:normHM(p[0]),e:normHM(p[1]),type:sl.type,label:sl.label};
+      const obj=normalizeSlotObj({id:sl.id,baseSlotId:sl.baseSlotId,roomNo:sl.roomNo,s:normHM(p[0]),e:normHM(p[1]),type:sl.type,label:sl.label});
       m[sl.id]=obj;
       const d=Number(dow);
       WEEKLY_SLOTS[d]=WEEKLY_SLOTS[d]||[];
@@ -2141,14 +2225,18 @@ function renderCalDetail(){
   const box=$('#calDetail');if(!box)return;
   const dt=new Date(selDate+'T00:00');
   const dows=['日','月','火','水','木','金','土'];
-  const list=DAYSLOTS[selDate]||[];
+  const list=displayDaySlots(selDate);
   const rows=list.map(sl=>{
-    const c=isCancelled(selDate,sl.id);
+    const c=isCancelledAny(selDate,sl);
     const tm=(sl.s||'')+(sl.e?'–'+sl.e:'');
     const lab=(sl.label||sl.id);
     const status=slotStatusLabel(selDate,sl,isClosedDay(selDate));
-    const docCell=doctorPillsFor(selDate,sl.id);
-    return `<tr><td>${lab}</td><td style="white-space:nowrap">${tm}</td><td style="white-space:nowrap;font-weight:800">${status||'—'}</td><td>${docCell}</td><td><button class="btn mini ${c?'r':'g'}" onclick="toggleCancel('${selDate}','${sl.id}')">${c?'休診（戻す）':'診療あり'}</button></td></tr>`;
+    const docNames=[...new Set((sl.ids||[sl.id]).flatMap(id=>(DOC_ASSIGN[selDate]&&DOC_ASSIGN[selDate][id])||[]))];
+    const docCell=docNames.length
+      ? `<div class="docwrap">${docNames.map(n=>`<span class="docpill" style="background:${colorByName(n)}">${surnameOf(n)}</span>`).join('')}</div>`
+      : '<span class="muted">—</span>';
+    const ids=(sl.ids||[sl.id]).join(',');
+    return `<tr><td>${lab}</td><td style="white-space:nowrap">${tm}</td><td style="white-space:nowrap;font-weight:800">${status||'—'}</td><td>${docCell}</td><td><button class="btn mini ${c?'r':'g'}" onclick="toggleCancelGroup('${selDate}','${ids}')">${c?'休診（戻す）':'診療あり'}</button></td></tr>`;
   }).join('');
   const hol=holidayName(selDate);
   const closed=isClosedDay(selDate);
