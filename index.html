@@ -469,8 +469,28 @@ function outpatientRoomCountForSlot(slot){
   return 2;
 }
 function outpatientRoomClosed(date,slotId,roomIdx,dayClosed){
-  const sl=OUTPATIENT_CLOSURES&&OUTPATIENT_CLOSURES[date]&&OUTPATIENT_CLOSURES[date][slotId];
+  const day=OUTPATIENT_CLOSURES&&OUTPATIENT_CLOSURES[date];
+  const sl=day&&day[slotId];
   if(sl&&Object.prototype.hasOwnProperty.call(sl,String(roomIdx)))return !!sl[String(roomIdx)];
+  if(dayClosed)return true;
+  return false;
+}
+// v67: シフト管理アプリの外来1診/2診分割に完全対応。
+// 集約表示された「午前外来」グループでも、各診察室の元スロットID(_slots)を見て開閉を判定する。
+// これにより、シフト表で「1診休み」なのにタイムカード側では「(1)○」になるズレを防ぐ。
+function outpatientRoomClosedForDisplay(date,slot,roomIdx,dayClosed){
+  const day=OUTPATIENT_CLOSURES&&OUTPATIENT_CLOSURES[date];
+  const subs=(slot&&Array.isArray(slot._slots)&&slot._slots.length)?slot._slots:[slot];
+  const sub=subs.find(x=>Number(x&&x.roomNo||0)===Number(roomIdx)) || subs[roomIdx-1] || slot;
+  const candidates=[];
+  if(sub&&sub.id)candidates.push({id:sub.id,room:1});          // v155+ 分割枠: 各枠の room 1 に保存
+  if(sub&&sub.id)candidates.push({id:sub.id,room:roomIdx});    // 互換: 分割枠に roomIdx 保存
+  if(slot&&slot.id)candidates.push({id:slot.id,room:roomIdx}); // 旧形式/集約枠
+  if(sub&&sub.baseSlotId)candidates.push({id:sub.baseSlotId,room:roomIdx}); // baseSlotId 互換
+  for(const c of candidates){
+    const m=day&&day[c.id];
+    if(m&&Object.prototype.hasOwnProperty.call(m,String(c.room)))return !!m[String(c.room)];
+  }
   if(dayClosed)return true;
   return false;
 }
@@ -479,7 +499,7 @@ function outpatientMarkForSlot(date,slot,dayClosed=false){
   const n=outpatientRoomCountForSlot(slot);
   const parts=[];
   for(let i=1;i<=n;i++){
-    parts.push(CLINIC_ROOM_NUMS[i]+(outpatientRoomClosed(date,slot.id,i,dayClosed)?'ー':'○'));
+    parts.push(CLINIC_ROOM_NUMS[i]+(outpatientRoomClosedForDisplay(date,slot,i,dayClosed)?'ー':'○'));
   }
   return parts.join('');
 }
@@ -2008,9 +2028,10 @@ function renderAdminPane(tab){
       <td><input type="time" value="${s.shift.e}" onchange="STAFF.find(x=>x.id=='${s.id}').shift.e=this.value;renderAdmin()"></td>
     </tr>`).join('')}</tbody></table>`;
   }else if(tab==='cal'){
-    p.innerHTML=`<p class="muted">管理者専用。左の月カレンダーで休診の枠が確認できます。日付をタップすると右に診療枠×時間帯の詳細が表示され、その場で編集できます。休診になった枠の人は、その日に打刻がなくても<b>無断欠勤になりません</b>。</p>
+    p.innerHTML=`<p class="muted">管理者専用。診療枠・外来1診/2診の開閉・手術予定は、表示時に<b>シフト管理アプリの最新データ</b>を取り込んで表示します。休診になった枠の人は、その日に打刻がなくても<b>無断欠勤になりません</b>。</p>
       <div class="cal-layout"><div class="cal-month" id="calMonth"></div><div class="cal-detail" id="calDetail"></div></div>`;
     renderCalMonth();renderCalDetail();
+    setTimeout(()=>refreshShiftForCalendar('tab'),0);
   }else if(tab==='import'){
     const pw=localStorage.getItem('tc_shiftpw')||'';
     p.innerHTML=`
@@ -2159,7 +2180,7 @@ function renderShowList(){
 let calY=Number(today.slice(0,4)), calM=Number(today.slice(5,7)); // 表示中の年・月
 let selDate=today; // 選択中の日付
 function ymd(y,m,d){return `${y}-${String(m).padStart(2,'0')}-${String(d).padStart(2,'0')}`;}
-function calShift(delta){calM+=delta;if(calM<1){calM=12;calY--;}if(calM>12){calM=1;calY++;}renderCalMonth();}
+function calShift(delta){calM+=delta;if(calM<1){calM=12;calY--;}if(calM>12){calM=1;calY++;}renderCalMonth();renderCalDetail();refreshShiftForCalendar('month');}
 /* ===== 日本の祝日（自動判定）と終日休診（管理者が設定） ===== */
 let CLOSED_DAYS={};   // 'YYYY-MM-DD' -> true（管理者が手動で終日休診にした日：お盆休み等）
 let SHIFT_CLOSED={};  // 'YYYY-MM-DD' -> true（シフトアプリの休診日 manualClosedDays から取り込み）
@@ -2405,6 +2426,29 @@ function autoCloudRefresh(){
     })
     .finally(()=>{ _autoRefreshing=false; });
 }
+// v67: 診療カレンダー表示時は、タイムカード側の古い保存値ではなく、必ずシフト管理アプリ側を再取得する。
+// これにより、シフト表で1診/2診休診にした変更がタイムカードカレンダーへ取り残されることを防ぐ。
+let _calendarShiftRefreshing=false;
+let _calendarShiftRefreshStamp='';
+function activeAdminTab(){const b=document.querySelector('#adminTabs button.active');return b?b.dataset.t:'';}
+function refreshShiftForCalendar(reason){
+  if(curRole!=='admin'||activeAdminTab()!=='cal')return;
+  const stamp=[curLoc,calY,calM,reason||'cal'].join('|');
+  if(_calendarShiftRefreshing)return;
+  // 同じ表示状態での連続再描画による多重取得を避ける。ただしタブ表示・月移動では再取得する。
+  if(_calendarShiftRefreshStamp===stamp)return;
+  _calendarShiftRefreshStamp=stamp;
+  const pw=localStorage.getItem('tc_shiftpw');
+  _calendarShiftRefreshing=true;
+  const done=()=>{_calendarShiftRefreshing=false; if(curRole==='admin'&&activeAdminTab()==='cal'){renderCalMonth();renderCalDetail();}};
+  if(pw){
+    cloudImport(pw).then(()=>{toast('シフト管理アプリの最新データを反映しました');done();})
+      .catch(e=>{try{localShiftAppImport();toast('クラウド取得に失敗。端末データを反映しました');done();}catch(_){_calendarShiftRefreshing=false;toast('シフト取得失敗: '+e.message);}});
+  }else{
+    try{localShiftAppImport();toast('シフト管理アプリ端末データを反映しました');done();}
+    catch(e){_calendarShiftRefreshing=false;}
+  }
+}
 $$('.roles button').forEach(b=>b.onclick=()=>setRole(b.dataset.role));
 $('#brandLogo').onclick=()=>setRole('ipad');
 // 本人ページ：ログイン／ログアウト
@@ -2449,6 +2493,14 @@ try{
   if(sp.get('admin')==='1'||sp.get('role')==='admin')setRole('admin');
   else setRole('ipad');
 }catch(e){setRole('ipad');}
+
+
+/*
+V67 changelog:
+- 診療カレンダー表示時に、タイムカード側の保存済みDAYSLOTS/OUTPATIENT_CLOSURESだけに頼らず、シフト管理アプリのクラウド/端末データを再取り込みするようにした。
+- 外来1診/2診を集約表示する際、各診察室の元スロットID(_slots)ごとに休診フラグを読むようにし、シフト表で1診休みなのにタイムカード側で(1)○になる不整合を修正。
+*/
+
 </script>
 <!--
 CHANGELOG V50
