@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>クリニック タイムカード V68</title>
+<title>クリニック タイムカード V69</title>
 <style>
   :root{
     --bg:#10402c; --panel:#ffffff; --ink:#1f2a24; --muted:#6b7c72;
@@ -165,12 +165,13 @@
   .marble.inflate{animation:minflate 1.1s cubic-bezier(.18,1.5,.4,1)}
   @keyframes minflate{0%{transform:scale(.7)}45%{transform:scale(1.32)}72%{transform:scale(.96)}100%{transform:scale(1)}}
 </style>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 </head>
 <body>
 <header class="app">
   <h1>
     <span class="brandlogo" id="brandLogo" title="iPad打刻画面に戻る"><span class="mark">🏥</span><span class="org">福耳会</span></span>
-    <span class="apptitle">クリニック タイムカード<span class="ver">V68</span></span>
+    <span class="apptitle">クリニック タイムカード<span class="ver">V69</span></span>
   </h1>
   <div class="roles">
     <button data-role="ipad" class="active">iPad打刻</button>
@@ -2009,6 +2010,7 @@ function renderAdminPane(tab){
       ${csvSource==='upload'?`<label>対象月<br><select class="f" id="monthSel">${MONTH_KEYS.map(m=>`<option value="${m}" ${m===curMonth?'selected':''}>${labels[m]||m}</option>`).join('')}</select></label>`:''}
       <label>表示クリニック<br><select class="f" id="clinicFilterSel">${clinicOptions}</select></label>
       <button class="btn" id="csvMonthBtn" style="margin-left:auto">📤 税理士提出CSVを書き出し（${csvClinicLabelById(csvClinicFilter)}・${rows.length}名）</button>
+      <button class="btn" id="xlsxMonthBtn" style="margin-left:8px">📊 Excelで書き出し（.xlsx）</button>
     </div>
     <div class="note">${csvSource==='calc'
       ? `各スタッフの<b>1か月分の打刻ログ</b>（${DEMO_MONTH}）を集計し、税理士フォーマット18列に反映したものです。<b>実働日数・遅刻/早退回数・実労働時間・休憩時間・遅刻/早退時間・実残業時間・有休日数・夜診察勤務</b>を打刻から自動計算しています（強調列）。現在の表示: <b>${csvClinicLabelById(csvClinicFilter)}</b>（${rows.length}/${allRows.length}名）。全表示では兼務スタッフを給与上の所属クリニックへ合算し、クリニック別表示では実勤務クリニック分だけを表示します。実シフト外労働・実深夜・月末有休残・有休時間は打刻からは算出せず空欄です。<br>※ デモのため当月の打刻は自動生成。iPad打刻すると当日分が上書き反映されます。`
@@ -2023,6 +2025,7 @@ function renderAdminPane(tab){
     const cf=$('#clinicFilterSel');if(cf)cf.onchange=e=>{csvClinicFilter=e.target.value;renderAdmin();};
     const ms=$('#monthSel');if(ms)ms.onchange=e=>setMonth(e.target.value);
     $('#csvMonthBtn').onclick=exportMonthlyCSV;
+    const _xb=$('#xlsxMonthBtn'); if(_xb)_xb.onclick=exportMonthlyXLSX;
   }else if(tab==='shift'){
     p.innerHTML=`<p class="muted">本日の予定シフトを編集できます（デモ）。</p>
     <table><thead><tr><th>名前</th><th>診療枠</th><th>開始</th><th>終了</th></tr></thead>
@@ -2388,6 +2391,30 @@ function exportMonthlyCSV(){
   const rows=filterCSVRowsByClinic(MONTHLY_ROWS,csvClinicFilter);
   writeCSVFile(rows,`勤務データ_${curMonth}_${clinicFile}.csv`);
   toast(`提出CSV（${csvClinicLabelById(csvClinicFilter)}・${rows.length}名）を書き出しました`);
+}
+// ===== 税理士提出：Excel(.xlsx)出力（.numbers/CSVと同じ18列レイアウト） =====
+function writeXLSXFile(dataRows,name){
+  if(typeof XLSX==='undefined'){toast('Excelライブラリを読込中です。数秒後にもう一度お試しください');return false;}
+  const XLSX_HEADER=[...CSV_HEADER.slice(0,-1),'夜診察勤務'];
+  const aoa=[XLSX_HEADER,...dataRows];
+  const ws=XLSX.utils.aoa_to_sheet(aoa);
+  ws['!cols']=XLSX_HEADER.map((h,i)=>({wch:i===0?11:i===1?12:i===2?34:10}));
+  const wb=XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb,ws,'勤務データ');
+  XLSX.writeFile(wb,name);
+  return true;
+}
+function exportMonthlyXLSX(){
+  const clinicFile=csvClinicFileById(csvClinicFilter);
+  if(csvSource==='calc'){
+    const rows=aggregateMonthRows(DEMO_MONTH,csvClinicFilter);
+    if(writeXLSXFile(rows,`勤務データ_打刻集計_${DEMO_MONTH}_${clinicFile}.xlsx`))
+      toast(`打刻集計Excel（${DEMO_MONTH}・${csvClinicLabelById(csvClinicFilter)}・${rows.length}名）を書き出しました`);
+    return;
+  }
+  const rows=filterCSVRowsByClinic(MONTHLY_ROWS,csvClinicFilter);
+  if(writeXLSXFile(rows,`勤務データ_${curMonth}_${clinicFile}.xlsx`))
+    toast(`提出Excel（${csvClinicLabelById(csvClinicFilter)}・${rows.length}名）を書き出しました`);
 }
 
 /* ============ 共通：切替・初期化 ============ */
