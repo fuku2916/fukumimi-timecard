@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>クリニック タイムカード V68</title>
+<title>クリニック タイムカード V66</title>
 <style>
   :root{
     --bg:#10402c; --panel:#ffffff; --ink:#1f2a24; --muted:#6b7c72;
@@ -165,12 +165,13 @@
   .marble.inflate{animation:minflate 1.1s cubic-bezier(.18,1.5,.4,1)}
   @keyframes minflate{0%{transform:scale(.7)}45%{transform:scale(1.32)}72%{transform:scale(.96)}100%{transform:scale(1)}}
 </style>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 </head>
 <body>
 <header class="app">
   <h1>
     <span class="brandlogo" id="brandLogo" title="iPad打刻画面に戻る"><span class="mark">🏥</span><span class="org">福耳会</span></span>
-    <span class="apptitle">クリニック タイムカード<span class="ver">V68</span></span>
+    <span class="apptitle">クリニック タイムカード<span class="ver">V66</span></span>
   </h1>
   <div class="roles">
     <button data-role="ipad" class="active">iPad打刻</button>
@@ -381,83 +382,6 @@ function surgeryMarkForSlot(date,slot){
   if(!v)return 'ー';
   return v[p]?'⭕️':'ー';
 }
-
-// v66: シフト管理アプリ側で外来を1診/2診に分けた後も、タイムカード側では
-// 「午前外来」「昼外来」「夜外来」として集約表示する。
-// 旧ID(am_out/pm2等)が割当に残っていても、カレンダーに raw ID が出ないよう正規化する。
-const LEGACY_SLOT_INFO={
-  am_out:{label:'午前外来',s:'09:30',e:'13:00',type:'out'},
-  pm1:{label:'昼外来',s:'14:00',e:'16:00',type:'out'},
-  pm2:{label:'夜外来',s:'16:00',e:'19:30',type:'out'},
-  pm_out:{label:'夜外来',s:'16:00',e:'19:30',type:'out'},
-  am_surg:{label:'午前手術',s:'09:30',e:'13:00',type:'surg'},
-  pm_surg:{label:'午後手術',s:'13:00',e:'19:00',type:'surg'}
-};
-function normalizeSlotLabel(label,id){
-  let s=String(label||'').trim();
-  const legacy=LEGACY_SLOT_INFO[id];
-  if(!s||s===id) s=(legacy&&legacy.label)||s||id;
-  s=s.replace(/[ 　]*(?:1|１|一)診$/,'').replace(/[ 　]*(?:2|２|二)診$/,'').trim();
-  s=s.replace(/[ 　]+第?[１２12一二]診$/,'').trim();
-  return s;
-}
-function normalizeSlotObj(slot){
-  slot=slot||{};
-  const rawId=String(slot.id||'');
-  const baseId=String(slot.baseSlotId||rawId.replace(/_r[12]$/,''));
-  const legacy=LEGACY_SLOT_INFO[baseId]||LEGACY_SLOT_INFO[rawId]||{};
-  let label=normalizeSlotLabel(slot.label||legacy.label||rawId,baseId||rawId);
-  let type=slot.type||legacy.type||'';
-  let s=slot.s||legacy.s||'', e=slot.e||legacy.e||'';
-  if((!s||!e)&&slot.time){
-    const p=String(slot.time).split('-');
-    if(p.length>=2){s=normHM(p[0]);e=normHM(p[1]);}
-  }
-  if(!type){
-    if(label.indexOf('外来')>=0)type='out';
-    else if(label.indexOf('手術')>=0)type='surg';
-  }
-  return {...slot,id:rawId||baseId,baseSlotId:baseId,label,s,e,type};
-}
-function slotDisplayKey(slot){
-  const sl=normalizeSlotObj(slot);
-  if(sl.type==='out')return 'out:'+outpatientLabelKeyForSlot(sl);
-  if(sl.type==='surg')return 'surg:'+(surgeryPeriodForSlot(sl)||sl.label||sl.id);
-  return 'other:'+(sl.label||sl.id);
-}
-function displayDaySlots(date){
-  const groups={};
-  (DAYSLOTS[date]||[]).forEach(orig=>{
-    const sl=normalizeSlotObj(orig);
-    const key=slotDisplayKey(sl);
-    if(!groups[key]){
-      groups[key]={...sl,ids:[sl.id],_slots:[sl]};
-    }else{
-      groups[key].ids.push(sl.id);
-      groups[key]._slots.push(sl);
-      const ss=toMin(sl.s), gs=toMin(groups[key].s);
-      const ee=toMin(sl.e), ge=toMin(groups[key].e);
-      if(ss!=null&&(gs==null||ss<gs))groups[key].s=sl.s;
-      if(ee!=null&&(ge==null||ee>ge))groups[key].e=sl.e;
-    }
-  });
-  return Object.values(groups).sort((a,b)=>(a.s||'').localeCompare(b.s||''));
-}
-function isCancelledAny(date,slot){
-  const ids=(slot&&slot.ids)||[slot&&slot.id];
-  return ids.some(id=>isCancelled(date,id));
-}
-function toggleCancelGroup(date,idsCsv){
-  const ids=String(idsCsv||'').split(',').filter(Boolean);
-  if(!ids.length)return;
-  const nowCancelled=ids.some(id=>isCancelled(date,id));
-  CANCELLED[date]=CANCELLED[date]||{};
-  ids.forEach(id=>{
-    if(nowCancelled)delete CANCELLED[date][id];
-    else CANCELLED[date][id]=true;
-  });
-  saveState();renderCalMonth();renderCalDetail();
-}
 const CLINIC_ROOM_NUMS=['','⑴','⑵'];
 function isOutpatientSlot(slot){
   const label=(slot&&slot.label||'').toString();
@@ -469,32 +393,8 @@ function outpatientRoomCountForSlot(slot){
   return 2;
 }
 function outpatientRoomClosed(date,slotId,roomIdx,dayClosed){
-  const day=OUTPATIENT_CLOSURES&&OUTPATIENT_CLOSURES[date];
-  const sl=day&&day[slotId];
+  const sl=OUTPATIENT_CLOSURES&&OUTPATIENT_CLOSURES[date]&&OUTPATIENT_CLOSURES[date][slotId];
   if(sl&&Object.prototype.hasOwnProperty.call(sl,String(roomIdx)))return !!sl[String(roomIdx)];
-  if(dayClosed)return true;
-  return false;
-}
-// v67: シフト管理アプリの外来1診/2診分割に完全対応。
-// 集約表示された「午前外来」グループでも、各診察室の元スロットID(_slots)を見て開閉を判定する。
-// これにより、シフト表で「1診休み」なのにタイムカード側では「(1)○」になるズレを防ぐ。
-function outpatientRoomClosedForDisplay(date,slot,roomIdx,dayClosed){
-  const day=OUTPATIENT_CLOSURES&&OUTPATIENT_CLOSURES[date];
-  const subs=(slot&&Array.isArray(slot._slots)&&slot._slots.length)?slot._slots:[slot];
-  const sub=subs.find(x=>Number(x&&x.roomNo||0)===Number(roomIdx)) || subs[roomIdx-1] || slot;
-  // v68: 担当医が割り当てられている診察室は、休診(ー)設定でも「○」にする（シフト管理アプリv187と同じ挙動）。
-  //      DOC_ASSIGN は分割スロットID(例 am_out_r2)ごとに医師名配列を持つ。医師がいれば開院(○)扱い。
-  const _dayDoc=DOC_ASSIGN&&DOC_ASSIGN[date];
-  if(_dayDoc&&sub&&sub.id&&Array.isArray(_dayDoc[sub.id])&&_dayDoc[sub.id].length>0)return false;
-  const candidates=[];
-  if(sub&&sub.id)candidates.push({id:sub.id,room:1});          // v155+ 分割枠: 各枠の room 1 に保存
-  if(sub&&sub.id)candidates.push({id:sub.id,room:roomIdx});    // 互換: 分割枠に roomIdx 保存
-  if(slot&&slot.id)candidates.push({id:slot.id,room:roomIdx}); // 旧形式/集約枠
-  if(sub&&sub.baseSlotId)candidates.push({id:sub.baseSlotId,room:roomIdx}); // baseSlotId 互換
-  for(const c of candidates){
-    const m=day&&day[c.id];
-    if(m&&Object.prototype.hasOwnProperty.call(m,String(c.room)))return !!m[String(c.room)];
-  }
   if(dayClosed)return true;
   return false;
 }
@@ -503,7 +403,7 @@ function outpatientMarkForSlot(date,slot,dayClosed=false){
   const n=outpatientRoomCountForSlot(slot);
   const parts=[];
   for(let i=1;i<=n;i++){
-    parts.push(CLINIC_ROOM_NUMS[i]+(outpatientRoomClosedForDisplay(date,slot,i,dayClosed)?'ー':'○'));
+    parts.push(CLINIC_ROOM_NUMS[i]+(outpatientRoomClosed(date,slot.id,i,dayClosed)?'ー':'○'));
   }
   return parts.join('');
 }
@@ -523,7 +423,6 @@ function outpatientLabelKeyForSlot(slot){
   return label||id||'外来';
 }
 function calendarSlotMark(date,slot,dayClosed=false){
-  slot=normalizeSlotObj(slot);
   if(isOutpatientSlot(slot)){
     const label=outpatientLabelKeyForSlot(slot);
     return {cls:'outpt',key:'out:'+label,text:label+'　'+outpatientMarkForSlot(date,slot,dayClosed)};
@@ -536,7 +435,7 @@ function calendarSlotMark(date,slot,dayClosed=false){
   return {cls:'doc',key:'other:'+((slot&&slot.id)||''),text:(slot.label||slot.id)};
 }
 function calendarSlotMarksHTML(date,dayClosed=false){
-  const raw=displayDaySlots(date).map(sl=>calendarSlotMark(date,sl,dayClosed)).filter(x=>x&&x.text);
+  const raw=(DAYSLOTS[date]||[]).map(sl=>calendarSlotMark(date,sl,dayClosed)).filter(x=>x&&x.text);
   const list=[];
   const seen=new Set();
   raw.forEach(x=>{
@@ -552,7 +451,6 @@ function calendarSlotMarksHTML(date,dayClosed=false){
   return shown+(list.length>5?`<span class="mk">+${list.length-5}</span>`:'');
 }
 function slotStatusLabel(date,slot,dayClosed=false){
-  slot=normalizeSlotObj(slot);
   if(isOutpatientSlot(slot))return outpatientMarkForSlot(date,slot,dayClosed);
   if(slot&&slot.type==='surg')return surgeryMarkForSlot(date,slot);
   return '';
@@ -560,8 +458,8 @@ function slotStatusLabel(date,slot,dayClosed=false){
 function addDaySlot(date,id){
   DAYSLOTS[date]=DAYSLOTS[date]||{};
   if(!DAYSLOTS[date][id]){
-    const t=normalizeSlotObj(SLOTLIB[id]||{id});
-    DAYSLOTS[date][id]=t;
+    const t=SLOTLIB[id]||{};
+    DAYSLOTS[date][id]={id,label:t.label||id,s:t.s||'',e:t.e||'',type:t.type||''};
   }
 }
 // 取り込んだ予定(SHIFTPLAN)とシフトアプリ側の診療枠(slots)から、日付ごとの診療枠リストを構築
@@ -615,7 +513,7 @@ function doctorPillsFor(date,slotId){
 }
 // その日の休診枠ラベル一覧（カレンダー表示用）
 function closedCells(date){
-  return displayDaySlots(date).filter(sl=>isCancelledAny(date,sl)).map(sl=>({label:sl.label||sl.id}));
+  return (DAYSLOTS[date]||[]).filter(sl=>isCancelled(date,sl.id)).map(sl=>({label:sl.label||sl.id}));
 }
 // その人がその日に出勤不要（担当している診療枠が全て休診）か
 function closureFor(s,date){
@@ -679,11 +577,6 @@ function loadState(){
     if(st.paid)PAID=st.paid;
     if(Array.isArray(st.editLog))EDIT_LOG=st.editLog;
     if(st.reqData)REQ_DATA=st.reqData;
-    try{
-      Object.keys(SLOTLIB||{}).forEach(k=>{SLOTLIB[k]=normalizeSlotObj(SLOTLIB[k]);});
-      Object.keys(WEEKLY_SLOTS||{}).forEach(d=>{WEEKLY_SLOTS[d]=(WEEKLY_SLOTS[d]||[]).map(normalizeSlotObj);});
-      Object.keys(DAYSLOTS||{}).forEach(d=>{if(Array.isArray(DAYSLOTS[d]))DAYSLOTS[d]=DAYSLOTS[d].map(normalizeSlotObj);});
-    }catch(_){}
     applyMeta();
     if(IMPORT_INFO){purgeOtherMonths();saveState();} // 取込済みなら旧デモ打刻を掃除して保存
   }catch(e){}
@@ -987,7 +880,7 @@ function jobSlotTimes(job){
   Object.entries(job.slots||{}).forEach(([dow,arr])=>{
     (arr||[]).forEach(sl=>{
       const p=(sl.time||'').split('-');if(p.length<2)return;
-      const obj=normalizeSlotObj({id:sl.id,baseSlotId:sl.baseSlotId,roomNo:sl.roomNo,s:normHM(p[0]),e:normHM(p[1]),type:sl.type,label:sl.label});
+      const obj={id:sl.id,s:normHM(p[0]),e:normHM(p[1]),type:sl.type,label:sl.label};
       m[sl.id]=obj;
       const d=Number(dow);
       WEEKLY_SLOTS[d]=WEEKLY_SLOTS[d]||[];
@@ -2009,6 +1902,7 @@ function renderAdminPane(tab){
       ${csvSource==='upload'?`<label>対象月<br><select class="f" id="monthSel">${MONTH_KEYS.map(m=>`<option value="${m}" ${m===curMonth?'selected':''}>${labels[m]||m}</option>`).join('')}</select></label>`:''}
       <label>表示クリニック<br><select class="f" id="clinicFilterSel">${clinicOptions}</select></label>
       <button class="btn" id="csvMonthBtn" style="margin-left:auto">📤 税理士提出CSVを書き出し（${csvClinicLabelById(csvClinicFilter)}・${rows.length}名）</button>
+      <button class="btn" id="xlsxMonthBtn" style="margin-left:8px">📊 Excelで書き出し（.xlsx）</button>
     </div>
     <div class="note">${csvSource==='calc'
       ? `各スタッフの<b>1か月分の打刻ログ</b>（${DEMO_MONTH}）を集計し、税理士フォーマット18列に反映したものです。<b>実働日数・遅刻/早退回数・実労働時間・休憩時間・遅刻/早退時間・実残業時間・有休日数・夜診察勤務</b>を打刻から自動計算しています（強調列）。現在の表示: <b>${csvClinicLabelById(csvClinicFilter)}</b>（${rows.length}/${allRows.length}名）。全表示では兼務スタッフを給与上の所属クリニックへ合算し、クリニック別表示では実勤務クリニック分だけを表示します。実シフト外労働・実深夜・月末有休残・有休時間は打刻からは算出せず空欄です。<br>※ デモのため当月の打刻は自動生成。iPad打刻すると当日分が上書き反映されます。`
@@ -2023,6 +1917,7 @@ function renderAdminPane(tab){
     const cf=$('#clinicFilterSel');if(cf)cf.onchange=e=>{csvClinicFilter=e.target.value;renderAdmin();};
     const ms=$('#monthSel');if(ms)ms.onchange=e=>setMonth(e.target.value);
     $('#csvMonthBtn').onclick=exportMonthlyCSV;
+    const _xb=$('#xlsxMonthBtn'); if(_xb)_xb.onclick=exportMonthlyXLSX;
   }else if(tab==='shift'){
     p.innerHTML=`<p class="muted">本日の予定シフトを編集できます（デモ）。</p>
     <table><thead><tr><th>名前</th><th>診療枠</th><th>開始</th><th>終了</th></tr></thead>
@@ -2032,10 +1927,9 @@ function renderAdminPane(tab){
       <td><input type="time" value="${s.shift.e}" onchange="STAFF.find(x=>x.id=='${s.id}').shift.e=this.value;renderAdmin()"></td>
     </tr>`).join('')}</tbody></table>`;
   }else if(tab==='cal'){
-    p.innerHTML=`<p class="muted">管理者専用。診療枠・外来1診/2診の開閉・手術予定は、表示時に<b>シフト管理アプリの最新データ</b>を取り込んで表示します。休診になった枠の人は、その日に打刻がなくても<b>無断欠勤になりません</b>。</p>
+    p.innerHTML=`<p class="muted">管理者専用。左の月カレンダーで休診の枠が確認できます。日付をタップすると右に診療枠×時間帯の詳細が表示され、その場で編集できます。休診になった枠の人は、その日に打刻がなくても<b>無断欠勤になりません</b>。</p>
       <div class="cal-layout"><div class="cal-month" id="calMonth"></div><div class="cal-detail" id="calDetail"></div></div>`;
     renderCalMonth();renderCalDetail();
-    setTimeout(()=>refreshShiftForCalendar('tab'),0);
   }else if(tab==='import'){
     const pw=localStorage.getItem('tc_shiftpw')||'';
     p.innerHTML=`
@@ -2184,7 +2078,7 @@ function renderShowList(){
 let calY=Number(today.slice(0,4)), calM=Number(today.slice(5,7)); // 表示中の年・月
 let selDate=today; // 選択中の日付
 function ymd(y,m,d){return `${y}-${String(m).padStart(2,'0')}-${String(d).padStart(2,'0')}`;}
-function calShift(delta){calM+=delta;if(calM<1){calM=12;calY--;}if(calM>12){calM=1;calY++;}renderCalMonth();renderCalDetail();refreshShiftForCalendar('month');}
+function calShift(delta){calM+=delta;if(calM<1){calM=12;calY--;}if(calM>12){calM=1;calY++;}renderCalMonth();}
 /* ===== 日本の祝日（自動判定）と終日休診（管理者が設定） ===== */
 let CLOSED_DAYS={};   // 'YYYY-MM-DD' -> true（管理者が手動で終日休診にした日：お盆休み等）
 let SHIFT_CLOSED={};  // 'YYYY-MM-DD' -> true（シフトアプリの休診日 manualClosedDays から取り込み）
@@ -2250,18 +2144,14 @@ function renderCalDetail(){
   const box=$('#calDetail');if(!box)return;
   const dt=new Date(selDate+'T00:00');
   const dows=['日','月','火','水','木','金','土'];
-  const list=displayDaySlots(selDate);
+  const list=DAYSLOTS[selDate]||[];
   const rows=list.map(sl=>{
-    const c=isCancelledAny(selDate,sl);
+    const c=isCancelled(selDate,sl.id);
     const tm=(sl.s||'')+(sl.e?'–'+sl.e:'');
     const lab=(sl.label||sl.id);
     const status=slotStatusLabel(selDate,sl,isClosedDay(selDate));
-    const docNames=[...new Set((sl.ids||[sl.id]).flatMap(id=>(DOC_ASSIGN[selDate]&&DOC_ASSIGN[selDate][id])||[]))];
-    const docCell=docNames.length
-      ? `<div class="docwrap">${docNames.map(n=>`<span class="docpill" style="background:${colorByName(n)}">${surnameOf(n)}</span>`).join('')}</div>`
-      : '<span class="muted">—</span>';
-    const ids=(sl.ids||[sl.id]).join(',');
-    return `<tr><td>${lab}</td><td style="white-space:nowrap">${tm}</td><td style="white-space:nowrap;font-weight:800">${status||'—'}</td><td>${docCell}</td><td><button class="btn mini ${c?'r':'g'}" onclick="toggleCancelGroup('${selDate}','${ids}')">${c?'休診（戻す）':'診療あり'}</button></td></tr>`;
+    const docCell=doctorPillsFor(selDate,sl.id);
+    return `<tr><td>${lab}</td><td style="white-space:nowrap">${tm}</td><td style="white-space:nowrap;font-weight:800">${status||'—'}</td><td>${docCell}</td><td><button class="btn mini ${c?'r':'g'}" onclick="toggleCancel('${selDate}','${sl.id}')">${c?'休診（戻す）':'診療あり'}</button></td></tr>`;
   }).join('');
   const hol=holidayName(selDate);
   const closed=isClosedDay(selDate);
@@ -2389,6 +2279,30 @@ function exportMonthlyCSV(){
   writeCSVFile(rows,`勤務データ_${curMonth}_${clinicFile}.csv`);
   toast(`提出CSV（${csvClinicLabelById(csvClinicFilter)}・${rows.length}名）を書き出しました`);
 }
+// ===== 税理士提出：Excel(.xlsx)出力（.numbers/CSVと同じ18列レイアウト） =====
+function writeXLSXFile(dataRows,name){
+  if(typeof XLSX==='undefined'){toast('Excelライブラリを読込中です。数秒後にもう一度お試しください');return false;}
+  const XLSX_HEADER=[...CSV_HEADER.slice(0,-1),'夜診察勤務'];
+  const aoa=[XLSX_HEADER,...dataRows];
+  const ws=XLSX.utils.aoa_to_sheet(aoa);
+  ws['!cols']=XLSX_HEADER.map((h,i)=>({wch:i===0?11:i===1?12:i===2?34:10}));
+  const wb=XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb,ws,'勤務データ');
+  XLSX.writeFile(wb,name);
+  return true;
+}
+function exportMonthlyXLSX(){
+  const clinicFile=csvClinicFileById(csvClinicFilter);
+  if(csvSource==='calc'){
+    const rows=aggregateMonthRows(DEMO_MONTH,csvClinicFilter);
+    if(writeXLSXFile(rows,`勤務データ_打刻集計_${DEMO_MONTH}_${clinicFile}.xlsx`))
+      toast(`打刻集計Excel（${DEMO_MONTH}・${csvClinicLabelById(csvClinicFilter)}・${rows.length}名）を書き出しました`);
+    return;
+  }
+  const rows=filterCSVRowsByClinic(MONTHLY_ROWS,csvClinicFilter);
+  if(writeXLSXFile(rows,`勤務データ_${curMonth}_${clinicFile}.xlsx`))
+    toast(`提出Excel（${csvClinicLabelById(csvClinicFilter)}・${rows.length}名）を書き出しました`);
+}
 
 /* ============ 共通：切替・初期化 ============ */
 function setRole(r){
@@ -2429,29 +2343,6 @@ function autoCloudRefresh(){
       catch(_){ toast('クラウド取得に失敗（ローカル表示のまま）: '+e.message); }
     })
     .finally(()=>{ _autoRefreshing=false; });
-}
-// v67: 診療カレンダー表示時は、タイムカード側の古い保存値ではなく、必ずシフト管理アプリ側を再取得する。
-// これにより、シフト表で1診/2診休診にした変更がタイムカードカレンダーへ取り残されることを防ぐ。
-let _calendarShiftRefreshing=false;
-let _calendarShiftRefreshStamp='';
-function activeAdminTab(){const b=document.querySelector('#adminTabs button.active');return b?b.dataset.t:'';}
-function refreshShiftForCalendar(reason){
-  if(curRole!=='admin'||activeAdminTab()!=='cal')return;
-  const stamp=[curLoc,calY,calM,reason||'cal'].join('|');
-  if(_calendarShiftRefreshing)return;
-  // 同じ表示状態での連続再描画による多重取得を避ける。ただしタブ表示・月移動では再取得する。
-  if(_calendarShiftRefreshStamp===stamp)return;
-  _calendarShiftRefreshStamp=stamp;
-  const pw=localStorage.getItem('tc_shiftpw');
-  _calendarShiftRefreshing=true;
-  const done=()=>{_calendarShiftRefreshing=false; if(curRole==='admin'&&activeAdminTab()==='cal'){renderCalMonth();renderCalDetail();}};
-  if(pw){
-    cloudImport(pw).then(()=>{toast('シフト管理アプリの最新データを反映しました');done();})
-      .catch(e=>{try{localShiftAppImport();toast('クラウド取得に失敗。端末データを反映しました');done();}catch(_){_calendarShiftRefreshing=false;toast('シフト取得失敗: '+e.message);}});
-  }else{
-    try{localShiftAppImport();toast('シフト管理アプリ端末データを反映しました');done();}
-    catch(e){_calendarShiftRefreshing=false;}
-  }
 }
 $$('.roles button').forEach(b=>b.onclick=()=>setRole(b.dataset.role));
 $('#brandLogo').onclick=()=>setRole('ipad');
@@ -2497,14 +2388,6 @@ try{
   if(sp.get('admin')==='1'||sp.get('role')==='admin')setRole('admin');
   else setRole('ipad');
 }catch(e){setRole('ipad');}
-
-
-/*
-V68 changelog:
-- 診療カレンダー表示時に、タイムカード側の保存済みDAYSLOTS/OUTPATIENT_CLOSURESだけに頼らず、シフト管理アプリのクラウド/端末データを再取り込みするようにした。
-- 外来1診/2診を集約表示する際、各診察室の元スロットID(_slots)ごとに休診フラグを読むようにし、シフト表で1診休みなのにタイムカード側で(1)○になる不整合を修正。
-*/
-
 </script>
 <!--
 CHANGELOG V50
