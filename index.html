@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>クリニック タイムカード V72</title>
+<title>クリニック タイムカード V73</title>
 <style>
   :root{
     --bg:#10402c; --panel:#ffffff; --ink:#1f2a24; --muted:#6b7c72;
@@ -171,7 +171,7 @@
 <header class="app">
   <h1>
     <span class="brandlogo" id="brandLogo" title="iPad打刻画面に戻る"><span class="mark">🏥</span><span class="org">福耳会</span></span>
-    <span class="apptitle">クリニック タイムカード<span class="ver">V72</span></span>
+    <span class="apptitle">クリニック タイムカード<span class="ver">V73</span></span>
   </h1>
   <div class="roles">
     <button data-role="ipad" class="active">iPad打刻</button>
@@ -1892,7 +1892,7 @@ function renderWorkPane(code){
       const v=[];if(sh&&r.in){const di=toMin(r.in)-toMin(sh.start);if(di>TOL)v.push(['遅刻+'+di+'分','late']);else if(di<-TOL)v.push(['早出'+di+'分','ok']);}
       if(sh&&r.out){const dd=toMin(r.out)-toMin(sh.end);if(dd>TOL)v.push(['残業+'+dd+'分','over']);else if(dd<-TOL)v.push(['早退'+dd+'分','late']);}
       if(nw!=null&&nw>480)v.push(['法定残業+'+(nw-480)+'分','over']);if(!v.length)v.push(['定時','ok']);
-      const origCell=r.edited?`<span class="pill late">修正済</span> <span class="muted" style="font-size:11px">原本 ${r.orig.in||'—'}–${r.orig.out||'—'} <button class="btn mini ghost" onclick="revertWorkPunch('${code}','${d}')">原本へ戻す</button></span>`:'<span class="muted" style="font-size:11px">原本</span>';
+      const origCell=(r.edited&&r.orig)?`<span class="pill late">修正済</span> <span class="muted" style="font-size:11px">原本 ${r.orig.in||'—'}–${r.orig.out||'—'} <button class="btn mini ghost" onclick="revertWorkPunch('${code}','${d}')">原本へ戻す</button></span>`:'<span class="muted" style="font-size:11px">原本</span>';
       return `<tr><td>${d}</td><td>${sh?sh.start+'–'+sh.end:'—'}</td>
         <td><input type="time" value="${r.in||''}" onchange="setWorkPunch('${code}','${d}','in',this.value)"></td>
         <td><input type="time" value="${r.out||''}" onchange="setWorkPunch('${code}','${d}','out',this.value)"></td>
@@ -2435,7 +2435,7 @@ function importPunchCSV(text){
       const code=(r[0]||'').trim(), date=(r[2]||'').trim(), tin=(r[3]||'').trim(), tout=(r[4]||'').trim();
       if(!code||!/^\d{4}-\d{2}-\d{2}$/.test(date)) return;
       PUNCHLOG[code]=PUNCHLOG[code]||{};
-      PUNCHLOG[code][date]={in:tin||null,out:tout||null,edited:true};
+      PUNCHLOG[code][date]={in:tin||null,out:tout||null};
       n++; months[date.slice(0,7)]=(months[date.slice(0,7)]||0)+1;
     });
     if(!n){alert('取り込める打刻行がありませんでした。CSV形式（コード,姓名,日付,出勤,退勤）をご確認ください。');return;}
