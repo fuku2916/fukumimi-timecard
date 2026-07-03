@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>クリニック タイムカード V69</title>
+<title>クリニック タイムカード V70</title>
 <style>
   :root{
     --bg:#10402c; --panel:#ffffff; --ink:#1f2a24; --muted:#6b7c72;
@@ -171,7 +171,7 @@
 <header class="app">
   <h1>
     <span class="brandlogo" id="brandLogo" title="iPad打刻画面に戻る"><span class="mark">🏥</span><span class="org">福耳会</span></span>
-    <span class="apptitle">クリニック タイムカード<span class="ver">V69</span></span>
+    <span class="apptitle">クリニック タイムカード<span class="ver">V70</span></span>
   </h1>
   <div class="roles">
     <button data-role="ipad" class="active">iPad打刻</button>
@@ -2011,6 +2011,7 @@ function renderAdminPane(tab){
       <label>表示クリニック<br><select class="f" id="clinicFilterSel">${clinicOptions}</select></label>
       <button class="btn" id="csvMonthBtn" style="margin-left:auto">📤 税理士提出CSVを書き出し（${csvClinicLabelById(csvClinicFilter)}・${rows.length}名）</button>
       <button class="btn" id="xlsxMonthBtn" style="margin-left:8px">📊 Excelで書き出し（.xlsx）</button>
+      <button class="btn" id="punchImpBtn" style="margin-left:8px">📥 打刻データCSV取込</button>
     </div>
     <div class="note">${csvSource==='calc'
       ? `各スタッフの<b>1か月分の打刻ログ</b>（${DEMO_MONTH}）を集計し、税理士フォーマット18列に反映したものです。<b>実働日数・遅刻/早退回数・実労働時間・休憩時間・遅刻/早退時間・実残業時間・有休日数・夜診察勤務</b>を打刻から自動計算しています（強調列）。現在の表示: <b>${csvClinicLabelById(csvClinicFilter)}</b>（${rows.length}/${allRows.length}名）。全表示では兼務スタッフを給与上の所属クリニックへ合算し、クリニック別表示では実勤務クリニック分だけを表示します。実シフト外労働・実深夜・月末有休残・有休時間は打刻からは算出せず空欄です。<br>※ デモのため当月の打刻は自動生成。iPad打刻すると当日分が上書き反映されます。`
@@ -2026,6 +2027,7 @@ function renderAdminPane(tab){
     const ms=$('#monthSel');if(ms)ms.onchange=e=>setMonth(e.target.value);
     $('#csvMonthBtn').onclick=exportMonthlyCSV;
     const _xb=$('#xlsxMonthBtn'); if(_xb)_xb.onclick=exportMonthlyXLSX;
+    const _pb=$('#punchImpBtn'); if(_pb)_pb.onclick=pickPunchCSV;
   }else if(tab==='shift'){
     p.innerHTML=`<p class="muted">本日の予定シフトを編集できます（デモ）。</p>
     <table><thead><tr><th>名前</th><th>診療枠</th><th>開始</th><th>終了</th></tr></thead>
@@ -2416,6 +2418,25 @@ function exportMonthlyXLSX(){
   if(writeXLSXFile(rows,`勤務データ_${curMonth}_${clinicFile}.xlsx`))
     toast(`提出Excel（${csvClinicLabelById(csvClinicFilter)}・${rows.length}名）を書き出しました`);
 }
+// ===== v70: 打刻データCSV（コード,姓名,日付,出勤,退勤）取り込み（動作確認用） =====
+function importPunchCSV(text){
+  try{
+    const P=text.replace(/^﻿/,'').split(/\r?\n/).filter(r=>r).map(r=>{const o=[];let c='',q=0;for(let i=0;i<r.length;i++){const ch=r[i];if(q){if(ch=='"'){if(r[i+1]=='"'){c+='"';i++;}else q=0;}else c+=ch;}else{if(ch=='"')q=1;else if(ch==','){o.push(c);c='';}else c+=ch;}}o.push(c);return o;});
+    let n=0; const months={};
+    P.forEach((r,idx)=>{
+      if(idx===0 && /コード/.test(r[0]||'')) return;
+      const code=(r[0]||'').trim(), date=(r[2]||'').trim(), tin=(r[3]||'').trim(), tout=(r[4]||'').trim();
+      if(!code||!/^\d{4}-\d{2}-\d{2}$/.test(date)) return;
+      PUNCHLOG[code]=PUNCHLOG[code]||{};
+      PUNCHLOG[code][date]={in:tin||null,out:tout||null,edited:true};
+      n++; months[date.slice(0,7)]=(months[date.slice(0,7)]||0)+1;
+    });
+    if(!n){alert('取り込める打刻行がありませんでした。CSV形式（コード,姓名,日付,出勤,退勤）をご確認ください。');return;}
+    saveState(); refreshTodayPunchRecords(); if(curRole==='admin')renderAdmin();
+    alert('打刻データを取り込みました：'+n+'件\n月別：'+Object.entries(months).map(([m,c])=>m+'('+c+'件)').join(' / ')+'\n\n「税理士提出データ / CSV」タブの「打刻集計（当月）」でご確認ください。');
+  }catch(err){alert('取り込みに失敗しました：'+(err&&err.message||err));}
+}
+function pickPunchCSV(){const inp=document.createElement('input');inp.type='file';inp.accept='.csv,text/csv';inp.onchange=e=>{const fl=e.target.files&&e.target.files[0];if(!fl)return;const rd=new FileReader();rd.onload=()=>importPunchCSV(String(rd.result));rd.readAsText(fl,'utf-8');};inp.click();}
 
 /* ============ 共通：切替・初期化 ============ */
 function setRole(r){
