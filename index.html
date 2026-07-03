@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>クリニック タイムカード V71</title>
+<title>クリニック タイムカード V72</title>
 <style>
   :root{
     --bg:#10402c; --panel:#ffffff; --ink:#1f2a24; --muted:#6b7c72;
@@ -171,7 +171,7 @@
 <header class="app">
   <h1>
     <span class="brandlogo" id="brandLogo" title="iPad打刻画面に戻る"><span class="mark">🏥</span><span class="org">福耳会</span></span>
-    <span class="apptitle">クリニック タイムカード<span class="ver">V71</span></span>
+    <span class="apptitle">クリニック タイムカード<span class="ver">V72</span></span>
   </h1>
   <div class="roles">
     <button data-role="ipad" class="active">iPad打刻</button>
@@ -1865,11 +1865,13 @@ function setWorkAvatar(code,key,val){
   AVATAR_PREF[code][key]=val;
   saveAvatarPref();renderWorkPane(code);
 }
+let WORK_MONTH=null;
 function renderWorkPane(code){
   const box=$('#workPane');if(!box)return;
   const s=STAFF.find(x=>x.id==code);if(!s)return;
+  const wm=WORK_MONTH||DEMO_MONTH;
   const log=PUNCHLOG[code]||{};const plan=SHIFTPLAN[code]||{};
-  const days=Object.keys(log).filter(d=>d.startsWith(DEMO_MONTH)).sort().reverse();
+  const days=Object.keys(log).filter(d=>d.startsWith(wm)).sort().reverse();
   let tot=0;days.forEach(d=>{const n=netWork(log[d]);if(n)tot+=n;});
   const todayRec=log[today];
   const statusTxt=todayRec?(todayRec.out?'退勤済':'勤務中'):'未出勤';
@@ -1880,11 +1882,11 @@ function renderWorkPane(code){
   box.innerHTML=`
     <div class="kpi" style="margin-bottom:14px">
       <div class="box"><div class="n">${statusTxt}</div><div class="l">本日の状態</div></div>
-      <div class="box"><div class="n">${tot?(tot/60).toFixed(1)+'h':'—'}</div><div class="l">${DEMO_MONTH} 実働</div></div>
+      <div class="box"><div class="n">${tot?(tot/60).toFixed(1)+'h':'—'}</div><div class="l">${wm} 実働</div></div>
       <div class="box"><div class="n">${remTxt}</div><div class="l">有給残（${remNote}）</div></div>
       <div class="box"><div class="n">${days.length}</div><div class="l">出勤日数</div></div>
     </div>
-    <h2 style="font-size:14px;margin:0 0 6px">打刻履歴・修正（${DEMO_MONTH}）</h2>
+    <h2 style="font-size:14px;margin:0 0 6px">打刻履歴・修正（${wm}）</h2>
     <div style="overflow:auto"><table><thead><tr><th>日付</th><th>シフト</th><th>出勤</th><th>退勤</th><th>実働</th><th>判定</th><th>原本/修正</th></tr></thead>
     <tbody>${days.length?days.map(d=>{const r=log[d];const sh=plan[d];const nw=netWork(r);
       const v=[];if(sh&&r.in){const di=toMin(r.in)-toMin(sh.start);if(di>TOL)v.push(['遅刻+'+di+'分','late']);else if(di<-TOL)v.push(['早出'+di+'分','ok']);}
@@ -1896,7 +1898,7 @@ function renderWorkPane(code){
         <td><input type="time" value="${r.out||''}" onchange="setWorkPunch('${code}','${d}','out',this.value)"></td>
         <td>${toHM(nw)}</td><td>${v.map(x=>`<span class="pill ${x[1]}">${x[0]}</span>`).join(' ')}</td>
         <td>${origCell}</td></tr>`;
-    }).join(''):`<tr><td colspan="7" class="muted">${DEMO_MONTH} の打刻がありません。</td></tr>`}</tbody></table></div>
+    }).join(''):`<tr><td colspan="7" class="muted">${wm} の打刻がありません。</td></tr>`}</tbody></table></div>
     <div class="note">打刻ミスを直接訂正できます。<b>最初の打刻（原本）は消えず保持</b>され、いつ・誰が・何を変えたかは下の修正履歴に残ります。修正後は「シフトアプリからデータ取り込み」タブ下の「本人データをクラウドへ保存」でクラウド（＝本人スマホ）へ反映されます。</div>
     ${(()=>{const es=EDIT_LOG.filter(e=>e.code==code);return es.length?`<h2 style="font-size:14px;margin:14px 0 6px">修正履歴（監査ログ）</h2>
       <div style="overflow:auto;max-height:200px"><table style="font-size:12px"><thead><tr><th>日時</th><th>操作者</th><th>対象日</th><th>項目</th><th>前</th><th>後</th></tr></thead>
@@ -1916,10 +1918,15 @@ function renderAdminPane(tab){
   const p=$('#adminPane');
   if(tab==='work'){
     const opts=STAFF.map(s=>`<option value="${s.id}">${s.name}（${(LOCATIONS.find(l=>l.id===s.loc)||{}).short||''}）</option>`).join('');
-    p.innerHTML=`<div class="row" style="align-items:flex-end;margin-bottom:6px">
+    const _wmAll=[...new Set([DEMO_MONTH,...Object.values(PUNCHLOG).flatMap(o=>Object.keys(o||{}).map(d=>d.slice(0,7)))])].filter(Boolean).sort();
+    if(!WORK_MONTH||_wmAll.indexOf(WORK_MONTH)<0)WORK_MONTH=DEMO_MONTH;
+    const monthOpts=_wmAll.map(m=>`<option value="${m}" ${m===WORK_MONTH?'selected':''}>${m}</option>`).join('');
+    p.innerHTML=`<div class="row" style="align-items:flex-end;margin-bottom:6px;gap:12px">
         <label>スタッフ<br><select class="f" id="workStaff" style="min-width:260px">${opts}</select></label>
+        <label>対象月<br><select class="f" id="workMonthSel">${monthOpts}</select></label>
       </div><div id="workPane"></div>`;
     const sel=$('#workStaff');
+    const msel=$('#workMonthSel'); if(msel)msel.onchange=()=>{WORK_MONTH=msel.value;renderWorkPane(sel.value);};
     sel.onchange=()=>renderWorkPane(sel.value);
     renderWorkPane(sel.value);
   }else if(tab==='diff'){
