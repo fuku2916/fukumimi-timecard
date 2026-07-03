@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>クリニック タイムカード V70</title>
+<title>クリニック タイムカード V71</title>
 <style>
   :root{
     --bg:#10402c; --panel:#ffffff; --ink:#1f2a24; --muted:#6b7c72;
@@ -171,7 +171,7 @@
 <header class="app">
   <h1>
     <span class="brandlogo" id="brandLogo" title="iPad打刻画面に戻る"><span class="mark">🏥</span><span class="org">福耳会</span></span>
-    <span class="apptitle">クリニック タイムカード<span class="ver">V70</span></span>
+    <span class="apptitle">クリニック タイムカード<span class="ver">V71</span></span>
   </h1>
   <div class="roles">
     <button data-role="ipad" class="active">iPad打刻</button>
@@ -2432,8 +2432,11 @@ function importPunchCSV(text){
       n++; months[date.slice(0,7)]=(months[date.slice(0,7)]||0)+1;
     });
     if(!n){alert('取り込める打刻行がありませんでした。CSV形式（コード,姓名,日付,出勤,退勤）をご確認ください。');return;}
+    // 取り込んだ打刻の月へ表示対象(DEMO_MONTH)を自動で合わせる（件数の多い月を採用）
+    const _topM=Object.entries(months).sort((a,b)=>b[1]-a[1])[0];
+    if(_topM){ DEMO_MONTH=_topM[0]; csvSource='calc'; }
     saveState(); refreshTodayPunchRecords(); if(curRole==='admin')renderAdmin();
-    alert('打刻データを取り込みました：'+n+'件\n月別：'+Object.entries(months).map(([m,c])=>m+'('+c+'件)').join(' / ')+'\n\n「税理士提出データ / CSV」タブの「打刻集計（当月）」でご確認ください。');
+    alert('打刻データを取り込みました：'+n+'件\n月別：'+Object.entries(months).map(([m,c])=>m+'('+c+'件)').join(' / ')+'\n\n表示対象月を '+(_topM?_topM[0]:'')+' に切り替えました。\n「税理士提出データ / CSV」タブの「打刻集計」でご確認ください。\n※別の月（例 '+Object.keys(months).join('・')+'）を見るには、その月の打刻を再取込するか、月切替をご利用ください。');
   }catch(err){alert('取り込みに失敗しました：'+(err&&err.message||err));}
 }
 function pickPunchCSV(){const inp=document.createElement('input');inp.type='file';inp.accept='.csv,text/csv';inp.onchange=e=>{const fl=e.target.files&&e.target.files[0];if(!fl)return;const rd=new FileReader();rd.onload=()=>importPunchCSV(String(rd.result));rd.readAsText(fl,'utf-8');};inp.click();}
