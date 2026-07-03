@@ -302,7 +302,11 @@ const WAGE_BANDS = {
   demachi:[{label:'通常',start:'09:00',end:'18:00'},{label:'夜外来',start:'18:00',end:'21:00'}],
   karasuma:[{label:'通常',start:'09:00',end:'18:00'},{label:'夜外来',start:'18:00',end:'21:00'}],
 };
-const today = new Date().toISOString().slice(0,10);
+// 【v74修正】「今日」はローカル(日本)時間で毎回計算する。
+// 旧実装は toISOString()(UTC基準)のため朝9時前は前日の日付になり、さらに const で
+// 起動時に固定されるため、iPad付けっぱなし運用では翌日以降も古い日付に打刻されていた。
+function todayStr(){const d=new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}
+Object.defineProperty(window,'today',{get:todayStr}); // 既存コードの today 参照は常に最新のローカル日付を返す
 function hm(s){return s} // helper passthrough
 
 // スタッフ（勤務開始日・希望就業時間・本日のシフト/実打刻つき）
@@ -750,7 +754,7 @@ function calcDaily(s){
 /* ===== 打刻ログ（日別）と 1か月集計 → CSV ===== */
 // PUNCHLOG[staffId][YYYY-MM-DD] = {in,out}
 let PUNCHLOG={};
-function logPunch(s){PUNCHLOG[s.id]=PUNCHLOG[s.id]||{};PUNCHLOG[s.id][today]={in:s.rec.in,out:s.rec.out};}
+function logPunch(s){PUNCHLOG[s.id]=PUNCHLOG[s.id]||{};PUNCHLOG[s.id][today]={in:s.rec.in,out:s.rec.out,real:true};} // 【v74修正】real=実打刻の印（デモ再生成で消さない）
 function refreshTodayPunchRecords(){
   // 画面表示用の s.rec は、必ず本日の PUNCHLOG から作り直す。
   // 初期デモデータに入っている rec:{in:'08:58',out:null} 等を勤務中判定に使わない。
@@ -1073,7 +1077,7 @@ function parseJob(job,jobName,idx,rep){
 function purgeOtherMonths(){
   const ym=DEMO_MONTH;
   Object.keys(PUNCHLOG).forEach(code=>{
-    Object.keys(PUNCHLOG[code]).forEach(d=>{if(!d.startsWith(ym))delete PUNCHLOG[code][d];});
+    Object.keys(PUNCHLOG[code]).forEach(d=>{const r=PUNCHLOG[code][d];if(!d.startsWith(ym)&&!(r&&(r.edited||r.real)))delete PUNCHLOG[code][d];}); // 【v74修正】実打刻・手修正は月が違っても消さない
   });
 }
 function parseImport(wrapped){
@@ -1100,12 +1104,12 @@ function seedPunchFromPlan(){
   Object.keys(SHIFTPLAN).forEach(code=>{
     PUNCHLOG[code]=PUNCHLOG[code]||{};
     // 対象月を一旦クリアして再生成（ただし手修正済みの打刻は保持）
-    Object.keys(PUNCHLOG[code]).forEach(d=>{if(d.startsWith(ym)&&!(PUNCHLOG[code][d]&&PUNCHLOG[code][d].edited))delete PUNCHLOG[code][d];});
+    Object.keys(PUNCHLOG[code]).forEach(d=>{const r=PUNCHLOG[code][d];if(d.startsWith(ym)&&!(r&&(r.edited||r.real)))delete PUNCHLOG[code][d];}); // 【v74修正】実打刻も保持
     const h=hashId(code);
     const lateDay=(h%20)+2, earlyDay=(h%16)+6; // この人が遅刻/早退する日
     Object.entries(SHIFTPLAN[code]).forEach(([date,sh])=>{
       if(!date.startsWith(ym))return;
-      if(PUNCHLOG[code][date]&&PUNCHLOG[code][date].edited)return; // 手修正済みは再生成しない
+      if(PUNCHLOG[code][date]&&(PUNCHLOG[code][date].edited||PUNCHLOG[code][date].real))return; // 【v74修正】手修正済み・実打刻は再生成しない
       if(LEAVEPLAN[code]&&LEAVEPLAN[code][date])return; // 休み/有給は打刻なし
       const day=Number(date.slice(8,10));
       if(rnd(h+day)<0.05)return;                        // まれに欠勤
@@ -1113,7 +1117,7 @@ function seedPunchFromPlan(){
       let outM=toMin(sh.end)+Math.round(rnd(h+day*3)*15-5);    // -5〜+10
       if(day===lateDay)inM=toMin(sh.start)+25;          // 遅刻
       if(day===earlyDay)outM=toMin(sh.end)-30;          // 早退
-      PUNCHLOG[code][date]={in:hmOf(Math.max(0,inM)),out:hmOf(outM)};
+      PUNCHLOG[code][date]={in:hmOf(Math.max(0,inM)),out:hmOf(outM),demo:true}; // 【v74修正】demo=自動生成の印
     });
   });
 }
@@ -2300,12 +2304,9 @@ function decide(id,status){
   r.status=status;
   // 打刻修正が承認されたら実際の打刻に反映
   if(status==='approved'&&r.type==='correction'){
-    const st=STAFF.find(x=>x.id==r.staff);
-    if(st){st.rec=st.rec||{in:null,out:null};
-      if(r.newIn)st.rec.in=r.newIn;
-      if(r.newOut)st.rec.out=r.newOut;
-      st.rec.edited=true;
-    }
+    // 【v74修正】表示用の st.rec ではなく保存本体 PUNCHLOG に、申請の対象日で反映する
+    applyCorrectionToPunch({code:r.staff,date:r.date||today,newIn:r.newIn,newOut:r.newOut});
+    refreshTodayPunchRecords();
   }
   saveState();renderAdmin();
   toast(status==='approved'?(r.type==='correction'?'承認し打刻に反映しました':'承認しました'):'却下しました');
