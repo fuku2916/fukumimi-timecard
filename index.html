@@ -979,7 +979,7 @@ function rosterIndex(){
   return {byCode,byFull,bySur};
 }
 function resolveCode(st,idx){
-  if(st.code)return idx.byCode[st.code]?{code:st.code,ok:true}:{code:st.code,ok:false,reason:'給与名簿に未登録のコード'};
+  if(st.code)return {code:st.code,ok:true};
   const full=(st.fullName||'').replace(/[\s（）]/g,'').replace('フル','');
   if(full&&idx.byFull[full])return{code:idx.byFull[full].id,ok:true,byName:true};
   const sur=(st.name||'').replace(/\s/g,'');
