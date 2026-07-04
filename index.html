@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>クリニック タイムカード V76</title>
+<title>クリニック タイムカード V77</title>
 <style>
   :root{
     --bg:#10402c; --panel:#ffffff; --ink:#1f2a24; --muted:#6b7c72;
@@ -171,7 +171,7 @@
 <header class="app">
   <h1>
     <span class="brandlogo" id="brandLogo" title="iPad打刻画面に戻る"><span class="mark">🏥</span><span class="org">福耳会</span></span>
-    <span class="apptitle">クリニック タイムカード<span class="ver">V76</span></span>
+    <span class="apptitle">クリニック タイムカード<span class="ver">V77</span></span>
   </h1>
   <div class="roles">
     <button data-role="ipad" class="active">iPad打刻</button>
@@ -1128,39 +1128,141 @@ function seedPunchFromPlan(){
   });
 }
 // 【v75】旧デモ用 seedPunchLog() は未使用（死にコード）のため削除
-// 1か月を集計し、税理士CSV(18列)に対応した行配列を返す
-function aggregateMonthRows(ym,clinicFilter='all'){
-  return STAFF.map(s=>{
+// 【v77】期間・勤務地・職種・氏名/コードで絞り込んで集計し、税理士CSV(18列)の行配列を返す。
+// from/to は 'YYYY-MM-DD'（両端を含む）。給与締め（11日〜翌月10日）のような月跨ぎ期間に対応。
+function tcSearchPeople(){
+  const seen=new Set(),people=[];
+  [...STAFF,...(IMPORT_STAFF||[])].forEach(s=>{const k=String(s.id);if(!seen.has(k)){seen.add(k);people.push(s);}});
+  return people;
+}
+function staffBelongsToClinic(s,cf){
+  if(cf==='all')return true;
+  const meta=staffMeta(s.id)||{};
+  return staffPayrollClinic(s)===cf||(meta.workClinics||[]).includes(cf)||s.loc===cf;
+}
+function aggregateRangeRows(from,to,clinicFilter='all',unitFilter='all',q=''){
+  const inR=d=>d>=from&&d<=to;
+  const qq=String(q||'').replace(/[\s　]/g,'');
+  return tcSearchPeople().filter(s=>{
+    if(unitFilter!=='all'&&(CODE_UNIT[s.id]||'')!==unitFilter)return false;
+    if(qq){const nm=String(s.name||'').replace(/[\s　]/g,'');
+      if(!(String(s.id).indexOf(qq)>=0||nm.indexOf(qq)>=0))return false;}
+    return true;
+  }).map(s=>{
     const log=PUNCHLOG[s.id]||{};
     const plan=SHIFTPLAN[s.id]||null;
     const lv=LEAVEPLAN[s.id]||null;
     let days=0,net=0,brk=0,ot=0,night=0,lateN=0,lateMin=0,earlyN=0,earlyMin=0,absent=0;
     const groupClinic=(clinicFilter==='all')?staffPayrollClinic(s):clinicFilter;
     const nb=NIGHT_BAND||(WAGE_BANDS[groupClinic]||WAGE_BANDS[s.loc]||[]).find(x=>x.label==='夜外来');
-    Object.keys(log).filter(d=>d.startsWith(ym)&&includeDateForClinic(s,d,clinicFilter)).forEach(d=>{
+    Object.keys(log).filter(d=>inR(d)&&includeDateForClinic(s,d,clinicFilter)).forEach(d=>{
       const r=log[d];if(!r||!r.in||!r.out)return;
       const g=toMin(r.out)-toMin(r.in);if(g<=0)return;
       const b=autoBreak(g), nt=g-b;
       days++; net+=nt; brk+=b; ot+=Math.max(0,nt-480);
       if(nb)night+=Math.max(0,Math.min(toMin(r.out),toMin(nb.e||nb.end))-Math.max(toMin(r.in),toMin(nb.s||nb.start)));
-      const sh=(plan&&plan[d])||{start:s.shift.s,end:s.shift.e}; // 予定シフト優先
-      const din=toMin(r.in)-toMin(sh.start); if(din>TOL){lateN++;lateMin+=din;}
-      const dout=toMin(sh.end)-toMin(r.out); if(dout>TOL){earlyN++;earlyMin+=dout;}
+      const sh=(plan&&plan[d])||(s.shift?{start:s.shift.s,end:s.shift.e}:null); // 予定シフト優先（予定が無い人は遅刻/早退を数えない）
+      if(sh){
+        const din=toMin(r.in)-toMin(sh.start); if(din>TOL){lateN++;lateMin+=din;}
+        const dout=toMin(sh.end)-toMin(r.out); if(dout>TOL){earlyN++;earlyMin+=dout;}
+      }
     });
-    if(plan)Object.keys(plan).filter(d=>d.startsWith(ym)&&includeDateForClinic(s,d,clinicFilter)).forEach(d=>{
+    if(plan)Object.keys(plan).filter(d=>inR(d)&&includeDateForClinic(s,d,clinicFilter)).forEach(d=>{
       const punched=log[d]&&log[d].in&&log[d].out;
       const excused=lv&&lv[d];
       if(!punched&&!excused&&!closureFor(s,d)&&!isClosedDay(d)&&!hasPendingCorrection(s.id,d))absent++;
     });
     const usedLeave = (PAID[s.id]!=null)
-      ? paidUsedInMonth(s.id,ym)
-      : REQUESTS.filter(q=>q.staff==s.id&&q.type==='leave'&&q.status==='approved'&&(q.date||'').startsWith(ym)).length;
+      ? PAID[s.id].taken.filter(t=>inR(t.date||'')).reduce((a,t)=>a+(t.days||0),0)
+      : REQUESTS.filter(qr=>qr.staff==s.id&&qr.type==='leave'&&qr.status==='approved'&&inR(qr.date||'')).length;
     const remainLeave = paidRemain(s.id);
     return [s.id, s.name, locNameById(groupClinic)||locNameById(s.loc),
       days||'', absent||'', lateN||'', earlyN||'',
       fmtDur(net), fmtDur(brk), fmtDur(lateMin), fmtDur(earlyMin),
       '', fmtDur(ot), '', usedLeave||'', (remainLeave!=null?remainLeave:''), '', fmtDur(night)];
-  }).filter(r=>clinicFilter==='all'||Number(r[3]||0)>0||Number(r[4]||0)>0||r[7]||r[12]||r[17]);
+  }).filter(r=>{
+    const hasData=Number(r[3]||0)>0||Number(r[4]||0)>0||r[7]||r[12]||r[17]||Number(r[14]||0)>0;
+    if(hasData||qq)return true; // 検索語指定時は空行でも表示
+    const s=tcSearchPeople().find(x=>String(x.id)===String(r[0]));
+    return s?staffBelongsToClinic(s,clinicFilter):false; // 勤務地の名簿に居る人は空行でも表示（提出実績の一覧と同じ）
+  });
+}
+// 1か月集計（従来API）。中身は aggregateRangeRows に一本化（重複コードの削減）。
+function aggregateMonthRows(ym,clinicFilter='all'){
+  const [y,m]=ym.split('-').map(Number);
+  return aggregateRangeRows(`${ym}-01`,`${ym}-${pad2(new Date(y,m,0).getDate())}`,clinicFilter);
+}
+/* ===== 【v77】検索条件（勤務地・職種・氏名/コード・期間）と個人別明細 ===== */
+let TC_SEARCH=null; // {from,to,clinic,unit,q}
+function payPeriodDefault(){
+  // 給与締め：開始=11日、終了=翌月10日。基準は集計対象月（DEMO_MONTH）。
+  const [y,m]=DEMO_MONTH.split('-').map(Number);
+  let y2=y,m2=m+1;if(m2>12){m2=1;y2++;}
+  return {from:`${y}-${pad2(m)}-11`,to:`${y2}-${pad2(m2)}-10`,clinic:'all',unit:'all',q:''};
+}
+function mmt(min){min=Math.max(0,Math.round(min||0));return `${pad2(Math.floor(min/60))}:${pad2(min%60)}`;}
+// 1名分の日別明細（予定・打刻・休みのいずれかがある日だけを行にする）
+function personalDailyRows(code,from,to){
+  const log=PUNCHLOG[code]||{}, plan=SHIFTPLAN[code]||{}, lv=LEAVEPLAN[code]||{};
+  const W=['日','月','火','水','木','金','土'];
+  const rows=[];
+  for(let dt=parseDateLocal(from);dateYMD(dt)<=to;dt=addDays(dt,1)){
+    const d=dateYMD(dt);
+    const r=log[d]||null, sh=plan[d]||null, leave=(lv&&lv[d])||'';
+    if(!r&&!sh&&!leave)continue;
+    const dow=dt.getDay();
+    const punched=!!(r&&r.in&&r.out);
+    let status='';
+    if(!punched){status=leave==='paid'?'有給':leave==='off'?'休み':(isClosedDay(d)||SHIFT_CLOSED[d])?'休診':sh?'欠勤':'';}
+    let net=0,b=0,ot=0,outside=0,night=0;
+    if(punched){
+      const g=toMin(r.out)-toMin(r.in);
+      if(g>0){b=autoBreak(g);net=g-b;ot=Math.max(0,net-480);
+        if(sh)outside=Math.max(0,toMin(sh.start)-toMin(r.in))+Math.max(0,toMin(r.out)-toMin(sh.end));
+        else outside=net;
+        const nb=NIGHT_BAND;if(nb)night=Math.max(0,Math.min(toMin(r.out),toMin(nb.e))-Math.max(toMin(r.in),toMin(nb.s)));
+      }
+    }
+    rows.push({d,label:`${pad2(dt.getMonth()+1)}/${pad2(dt.getDate())}(${W[dow]})`,dow,status,
+      holiday:dow===0?'法定休日':'',
+      shs:sh?sh.start:'',she:sh?sh.end:'',pin:(r&&r.in)||'',pout:(r&&r.out)||'',
+      net,brk:b,ot,outside,night,punched});
+  }
+  return rows;
+}
+// 個人別明細Excel（サンプル「個人名を指定した場合の出力結果」のレイアウトに準拠）
+function exportPersonalXLSX(){
+  if(typeof XLSX==='undefined'){toast('Excelライブラリを読込中です。数秒後にもう一度お試しください');return;}
+  const S=TC_SEARCH||payPeriodDefault();
+  const rows=aggregateRangeRows(S.from,S.to,S.clinic,S.unit,S.q);
+  if(!rows.length){alert('該当するスタッフがいません。検索条件をご確認ください。');return;}
+  if(rows.length>1){alert('個人別明細は1名に絞ってから出力してください。\nスタッフコードまたは氏名で検索して1名にしてください。（現在 '+rows.length+'名）');return;}
+  const code=rows[0][0],name=rows[0][1],group=rows[0][2];
+  const dr=personalDailyRows(code,S.from,S.to);
+  const sum=a=>({n:a.length,net:a.reduce((t,x)=>t+x.net,0),ot:a.reduce((t,x)=>t+x.ot,0)});
+  const all=sum(dr.filter(x=>x.punched)),w=sum(dr.filter(x=>x.punched&&x.dow!==0)),h=sum(dr.filter(x=>x.punched&&x.dow===0));
+  const absent=dr.filter(x=>x.status==='欠勤').length;
+  let late=0,early=0;
+  dr.forEach(x=>{if(x.punched&&x.shs){if(toMin(x.pin)-toMin(x.shs)>TOL)late++;if(toMin(x.she)-toMin(x.pout)>TOL)early++;}});
+  const aoa=[
+    [`勤務明細　${S.from} 〜 ${S.to}`],[],
+    ['スタッフ情報','','','','基本項目'],
+    ['スタッフ名','スタッフコード','所属グループ','','総合出勤日数','平日出勤日数','休日出勤日数','欠勤日数','遅刻回数','早退回数'],
+    [name,String(code),group,'',all.n,w.n,h.n,absent,late,early],[],
+    ['労働時間'],
+    ['総合','','','平日','','','休日','',''],
+    ['労働時間','残業時間','深夜時間','労働時間','残業時間','深夜時間','労働時間','残業時間','深夜時間'],
+    [mmt(all.net),mmt(all.ot),'00:00',mmt(w.net),mmt(w.ot),'00:00',mmt(h.net),mmt(h.ot),'00:00'],[],
+    ['日付','勤怠状況','休日区分','打刻場所','シフト開始時刻','シフト終了時刻','出勤時刻','退勤時刻','実労働時間','シフト外労働時間','実残業時間','実深夜時間','休憩時間','有休時間'],
+    ...dr.map(x=>[x.label,x.status,x.holiday,'(総計)',x.shs,x.she,x.pin,x.pout,
+      x.punched?mmt(x.net):'',x.punched?mmt(x.outside):'',x.punched?mmt(x.ot):'','00:00',x.punched?mmt(x.brk):'',''])
+  ];
+  const ws=XLSX.utils.aoa_to_sheet(aoa);
+  ws['!cols']=[{wch:11},{wch:9},{wch:9},{wch:9},{wch:13},{wch:13},{wch:9},{wch:9},{wch:10},{wch:15},{wch:10},{wch:10},{wch:9},{wch:9}];
+  const wb=XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb,ws,'個人別明細');
+  XLSX.writeFile(wb,`勤務明細_${String(name).replace(/[\s　]/g,'')}_${S.from}_${S.to}.xlsx`);
+  toast(`個人別明細（${name}・${S.from}〜${S.to}）を書き出しました`);
 }
 function importSummaryHTML(){
   if(!IMPORT_INFO)return '<p class="muted">まだ取り込んでいません。</p>';
@@ -1994,24 +2096,40 @@ function renderAdminPane(tab){
       </tr>`;}).join('')}</tbody></table>`;
   }else if(tab==='csv'){
     const labels={'2026-05':'2026年5月','2026-01':'2026年1月'};
-    const allRows = csvSource==='calc' ? aggregateMonthRows(DEMO_MONTH,'all') : MONTHLY_ROWS;
-    const rows = csvSource==='calc' ? aggregateMonthRows(DEMO_MONTH,csvClinicFilter) : filterCSVRowsByClinic(allRows,csvClinicFilter);
-    const clinicOptions = CSV_CLINIC_OPTIONS.map(o=>`<option value="${o.id}" ${csvClinicFilter===o.id?'selected':''}>${o.label}</option>`).join('');
+    if(!TC_SEARCH)TC_SEARCH=payPeriodDefault();
+    const S=TC_SEARCH;
+    const allRows = csvSource==='calc' ? aggregateRangeRows(S.from,S.to,'all','all','') : MONTHLY_ROWS;
+    const rows = csvSource==='calc' ? aggregateRangeRows(S.from,S.to,S.clinic,S.unit,S.q) : filterCSVRowsByClinic(allRows,csvClinicFilter);
+    const selClinic = csvSource==='calc'?S.clinic:csvClinicFilter;
+    const clinicOptions = CSV_CLINIC_OPTIONS.map(o=>`<option value="${o.id}" ${selClinic===o.id?'selected':''}>${o.label}</option>`).join('');
+    const UNIT_OPTS=[['all','全職種'],['doctor','ドクター'],['nurse','ナース'],['clerk','クラーク']];
+    const unitOptions = UNIT_OPTS.map(x=>`<option value="${x[0]}" ${S.unit===x[0]?'selected':''}>${x[1]}</option>`).join('');
+    const unitLabel=(UNIT_OPTS.find(x=>x[0]===S.unit)||UNIT_OPTS[0])[1];
     const calcCols=new Set([3,5,6,7,8,9,10,12,14,17]); // 打刻から自動計算する列（強調）
     p.innerHTML=`
+    ${csvSource==='calc'?`
+    <div class="row" style="align-items:flex-end;margin-bottom:8px;flex-wrap:wrap">
+      <label>勤務地<br><select class="f" id="schClinic">${clinicOptions}</select></label>
+      <label>職種<br><select class="f" id="schUnit">${unitOptions}</select></label>
+      <label>スタッフコード / 氏名<br><input class="f" id="schQ" value="${S.q||''}" placeholder="例: 1227 / 小田" style="width:140px"></label>
+      <label>開始日<br><input type="date" class="f" id="schFrom" value="${S.from}"></label>
+      <label>終了日<br><input type="date" class="f" id="schTo" value="${S.to}"></label>
+      <button class="btn" id="schBtn">🔍 検索</button>
+      <button class="btn" id="schResetBtn" title="開始=11日・終了=翌月10日（給与締め期間）に戻す">締め期間に戻す</button>
+    </div>`:''}
     <div class="row" style="align-items:flex-end;margin-bottom:8px">
       <label>データ元<br><select class="f" id="srcSel">
-        <option value="calc" ${csvSource==='calc'?'selected':''}>打刻集計（当月 ${DEMO_MONTH}・自動）</option>
+        <option value="calc" ${csvSource==='calc'?'selected':''}>打刻集計（期間指定・自動）</option>
         <option value="upload" ${csvSource==='upload'?'selected':''}>アップロード実績（過去月）</option>
       </select></label>
-      ${csvSource==='upload'?`<label>対象月<br><select class="f" id="monthSel">${MONTH_KEYS.map(m=>`<option value="${m}" ${m===curMonth?'selected':''}>${labels[m]||m}</option>`).join('')}</select></label>`:''}
-      <label>表示クリニック<br><select class="f" id="clinicFilterSel">${clinicOptions}</select></label>
-      <button class="btn" id="csvMonthBtn" style="margin-left:auto">📤 税理士提出CSVを書き出し（${csvClinicLabelById(csvClinicFilter)}・${rows.length}名）</button>
-      <button class="btn" id="xlsxMonthBtn" style="margin-left:8px">📊 Excelで書き出し（.xlsx）</button>
+      ${csvSource==='upload'?`<label>対象月<br><select class="f" id="monthSel">${MONTH_KEYS.map(m=>`<option value="${m}" ${m===curMonth?'selected':''}>${labels[m]||m}</option>`).join('')}</select></label><label>表示クリニック<br><select class="f" id="clinicFilterSel">${clinicOptions}</select></label>`:''}
+      <button class="btn" id="csvMonthBtn" style="margin-left:auto">📤 税理士提出CSV（${rows.length}名）</button>
+      <button class="btn" id="xlsxMonthBtn" style="margin-left:8px">📊 一覧Excel</button>
+      ${csvSource==='calc'?`<button class="btn" id="personXlsxBtn" style="margin-left:8px" title="検索で1名に絞ると出力できます">👤 個人別明細Excel</button>`:''}
       <button class="btn" id="punchImpBtn" style="margin-left:8px">📥 打刻データCSV取込</button>
     </div>
     <div class="note">${csvSource==='calc'
-      ? `各スタッフの<b>1か月分の打刻ログ</b>（${DEMO_MONTH}）を集計し、税理士フォーマット18列に反映したものです。<b>実働日数・遅刻/早退回数・実労働時間・休憩時間・遅刻/早退時間・実残業時間・有休日数・夜診察勤務</b>を打刻から自動計算しています（強調列）。現在の表示: <b>${csvClinicLabelById(csvClinicFilter)}</b>（${rows.length}/${allRows.length}名）。全表示では兼務スタッフを給与上の所属クリニックへ合算し、クリニック別表示では実勤務クリニック分だけを表示します。実シフト外労働・実深夜・月末有休残・有休時間は打刻からは算出せず空欄です。<br>※ デモのため当月の打刻は自動生成。iPad打刻すると当日分が上書き反映されます。`
+      ? `期間 <b>${S.from} 〜 ${S.to}</b>（給与締めは毎月11日〜翌月10日）・勤務地 <b>${csvClinicLabelById(S.clinic)}</b>・職種 <b>${unitLabel}</b>${S.q?`・検索「<b>${S.q}</b>」`:''} の打刻ログを税理士フォーマット18列に集計しています（該当 ${rows.length}名）。<b>実働日数・遅刻/早退回数・実労働時間・休憩時間・遅刻/早退時間・実残業時間・有休日数・夜診察勤務</b>を打刻から自動計算しています（強調列）。実シフト外労働・実深夜・月末有休残・有休時間は打刻からは算出せず空欄です。個人を指定するときはスタッフコードまたは氏名で検索してください（1名に絞ると「個人別明細Excel」が使えます）。`
       : `アップロードいただいた実績CSVを表示・出力します。現在の表示: <b>${csvClinicLabelById(csvClinicFilter)}</b>（${rows.length}/${allRows.length}名）。`}</div>
     <div style="overflow:auto;margin-top:10px;border:1px solid var(--line);border-radius:8px;max-height:520px">
       <table style="font-size:11px">
@@ -2020,10 +2138,15 @@ function renderAdminPane(tab){
       </table>
     </div>`;
     $('#srcSel').onchange=e=>{csvSource=e.target.value;renderAdmin();};
+    const readSearch=()=>{TC_SEARCH={from:$('#schFrom').value||S.from,to:$('#schTo').value||S.to,clinic:$('#schClinic').value,unit:$('#schUnit').value,q:$('#schQ').value.trim()};};
+    const sb=$('#schBtn'); if(sb)sb.onclick=()=>{readSearch();if(TC_SEARCH.from>TC_SEARCH.to){alert('開始日が終了日より後になっています。');return;}renderAdmin();};
+    const sq=$('#schQ'); if(sq)sq.onkeydown=e=>{if(e.key==='Enter'){readSearch();renderAdmin();}};
+    const sr=$('#schResetBtn'); if(sr)sr.onclick=()=>{readSearch();const d=payPeriodDefault();TC_SEARCH.from=d.from;TC_SEARCH.to=d.to;renderAdmin();};
     const cf=$('#clinicFilterSel');if(cf)cf.onchange=e=>{csvClinicFilter=e.target.value;renderAdmin();};
     const ms=$('#monthSel');if(ms)ms.onchange=e=>setMonth(e.target.value);
     $('#csvMonthBtn').onclick=exportMonthlyCSV;
     const _xb=$('#xlsxMonthBtn'); if(_xb)_xb.onclick=exportMonthlyXLSX;
+    const _px=$('#personXlsxBtn'); if(_px)_px.onclick=exportPersonalXLSX;
     const _pb=$('#punchImpBtn'); if(_pb)_pb.onclick=pickPunchCSV;
   }else if(tab==='shift'){
     p.innerHTML=`<p class="muted">本日の予定シフトを編集できます（デモ）。</p>
@@ -2380,11 +2503,11 @@ function filterCSVRowsByClinic(rows,clinicId){
 function exportMonthlyCSV(){
   const clinicFile=csvClinicFileById(csvClinicFilter);
   if(csvSource==='calc'){
-    const rows=aggregateMonthRows(DEMO_MONTH,csvClinicFilter);
-    writeCSVFile(rows,`勤務データ_打刻集計_${DEMO_MONTH}_${clinicFile}.csv`);
-    toast(`打刻集計CSV（${DEMO_MONTH}・${csvClinicLabelById(csvClinicFilter)}・${rows.length}名）を書き出しました`);return;
-  }
-  const rows=filterCSVRowsByClinic(MONTHLY_ROWS,csvClinicFilter);
+    const S=TC_SEARCH||payPeriodDefault();
+    const rows=aggregateRangeRows(S.from,S.to,S.clinic,S.unit,S.q);
+    writeCSVFile(rows,`勤務データ_打刻集計_${S.from}_${S.to}_${csvClinicFileById(S.clinic)}.csv`);
+    toast(`打刻集計CSV（${S.from}〜${S.to}・${csvClinicLabelById(S.clinic)}・${rows.length}名）を書き出しました`);return;
+  }  const rows=filterCSVRowsByClinic(MONTHLY_ROWS,csvClinicFilter);
   writeCSVFile(rows,`勤務データ_${curMonth}_${clinicFile}.csv`);
   toast(`提出CSV（${csvClinicLabelById(csvClinicFilter)}・${rows.length}名）を書き出しました`);
 }
@@ -2403,12 +2526,12 @@ function writeXLSXFile(dataRows,name){
 function exportMonthlyXLSX(){
   const clinicFile=csvClinicFileById(csvClinicFilter);
   if(csvSource==='calc'){
-    const rows=aggregateMonthRows(DEMO_MONTH,csvClinicFilter);
-    if(writeXLSXFile(rows,`勤務データ_打刻集計_${DEMO_MONTH}_${clinicFile}.xlsx`))
-      toast(`打刻集計Excel（${DEMO_MONTH}・${csvClinicLabelById(csvClinicFilter)}・${rows.length}名）を書き出しました`);
+    const S=TC_SEARCH||payPeriodDefault();
+    const rows=aggregateRangeRows(S.from,S.to,S.clinic,S.unit,S.q);
+    if(writeXLSXFile(rows,`勤務データ_打刻集計_${S.from}_${S.to}_${csvClinicFileById(S.clinic)}.xlsx`))
+      toast(`打刻集計Excel（${S.from}〜${S.to}・${csvClinicLabelById(S.clinic)}・${rows.length}名）を書き出しました`);
     return;
-  }
-  const rows=filterCSVRowsByClinic(MONTHLY_ROWS,csvClinicFilter);
+  }  const rows=filterCSVRowsByClinic(MONTHLY_ROWS,csvClinicFilter);
   if(writeXLSXFile(rows,`勤務データ_${curMonth}_${clinicFile}.xlsx`))
     toast(`提出Excel（${csvClinicLabelById(csvClinicFilter)}・${rows.length}名）を書き出しました`);
 }
@@ -2428,7 +2551,7 @@ function importPunchCSV(text){
     if(!n){alert('取り込める打刻行がありませんでした。CSV形式（コード,姓名,日付,出勤,退勤）をご確認ください。');return;}
     // 取り込んだ打刻の月へ表示対象(DEMO_MONTH)を自動で合わせる（件数の多い月を採用）
     const _topM=Object.entries(months).sort((a,b)=>b[1]-a[1])[0];
-    if(_topM){ DEMO_MONTH=_topM[0]; csvSource='calc'; }
+    if(_topM){ DEMO_MONTH=_topM[0]; csvSource='calc'; TC_SEARCH=null; } // 【v77】取込後は検索期間を締め期間に再初期化
     saveState(); refreshTodayPunchRecords(); if(curRole==='admin')renderAdmin();
     alert('打刻データを取り込みました：'+n+'件\n月別：'+Object.entries(months).map(([m,c])=>m+'('+c+'件)').join(' / ')+'\n\n表示対象月を '+(_topM?_topM[0]:'')+' に切り替えました。\n「税理士提出データ / CSV」タブの「打刻集計」でご確認ください。\n※別の月（例 '+Object.keys(months).join('・')+'）を見るには、その月の打刻を再取込するか、月切替をご利用ください。');
   }catch(err){alert('取り込みに失敗しました：'+(err&&err.message||err));}
