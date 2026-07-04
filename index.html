@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>クリニック タイムカード V75</title>
+<title>クリニック タイムカード V76</title>
 <style>
   :root{
     --bg:#10402c; --panel:#ffffff; --ink:#1f2a24; --muted:#6b7c72;
@@ -171,7 +171,7 @@
 <header class="app">
   <h1>
     <span class="brandlogo" id="brandLogo" title="iPad打刻画面に戻る"><span class="mark">🏥</span><span class="org">福耳会</span></span>
-    <span class="apptitle">クリニック タイムカード<span class="ver">V75</span></span>
+    <span class="apptitle">クリニック タイムカード<span class="ver">V76</span></span>
   </h1>
   <div class="roles">
     <button data-role="ipad" class="active">iPad打刻</button>
@@ -690,7 +690,7 @@ function loadState(){
       Object.keys(DAYSLOTS||{}).forEach(d=>{if(Array.isArray(DAYSLOTS[d]))DAYSLOTS[d]=DAYSLOTS[d].map(normalizeSlotObj);});
     }catch(_){}
     applyMeta();
-    if(IMPORT_INFO){purgeOtherMonths();saveState();} // 取込済みなら旧デモ打刻を掃除して保存
+    if(IMPORT_INFO){purgeDemoPunches();saveState();} // 【v76】起動時の掃除も demo印付きのみ対象（旧: purgeOtherMonths）
   }catch(e){}
 }
 
@@ -1073,13 +1073,9 @@ function parseJob(job,jobName,idx,rep){
   });
   return {y:job.y,m:job.m};
 }
-// 取込月(DEMO_MONTH)以外の打刻ログを削除（旧デモの残りを掃除）
-function purgeOtherMonths(){
-  const ym=DEMO_MONTH;
-  Object.keys(PUNCHLOG).forEach(code=>{
-    Object.keys(PUNCHLOG[code]).forEach(d=>{const r=PUNCHLOG[code][d];if(!d.startsWith(ym)&&!(r&&(r.edited||r.real)))delete PUNCHLOG[code][d];}); // 【v74修正】実打刻・手修正は月が違っても消さない
-  });
-}
+// 【v76】purgeOtherMonths() は廃止。「名札（印）のない打刻は捨てる」方式をやめ、
+// 「demo印が付いたものだけ捨てる」purgeDemoPunches() に一本化した。
+// これにより給与締め期間（11日〜翌月10日）が月をまたいでも、シフト再取込で打刻が消えない。
 function parseImport(wrapped){
   SHIFTPLAN={};LEAVEPLAN={};STAFF_PIN={};CODE_NAME={};PAID={};SLOTLIB={};WEEKLY_SLOTS={};SURGERY_FLAGS={};OUTPATIENT_CLOSURES={};IMPORT_STAFF=[];DOC_ASSIGN={};SHIFT_CLOSED={}; // NIGHT_BAND(割増時間帯)は管理者設定なので消さない
   const idx=rosterIndex();const rep=[];let ym=null;
@@ -1087,8 +1083,8 @@ function parseImport(wrapped){
     const r=parseJob(job,jn,idx,rep);if(r&&r.y&&r.m)ym=`${r.y}-${pad2(r.m)}`;});
   if(ym)DEMO_MONTH=ym;
   buildDaySlots();      // 取り込んだ診療枠から日別の枠リストを構築
-  purgeOtherMonths();   // 取込月以外の旧デモ打刻を消す
-  if(DEMO_SEED)seedPunchFromPlan();else purgeDemoPunches(); // 【v75】本番はデモ打刻を生成しない（URLに ?demo=1 を付けた画面のみ生成）
+  purgeDemoPunches();   // 【v76】掃除は「demo印が付いた打刻」だけ（月を問わず）。実打刻・CSV取込・手修正・無印の既存打刻は消さない
+  if(DEMO_SEED)seedPunchFromPlan(); // デモ画面(?demo=1)のみ、予定からサンプル打刻を生成
   IMPORT_INFO={at:new Date().toISOString(),month:ym,report:rep};
   refreshTodayPunchRecords();
   saveAvatarPref(); // 取り込んだアイコン設定を保存
@@ -2426,7 +2422,7 @@ function importPunchCSV(text){
       const code=(r[0]||'').trim(), date=(r[2]||'').trim(), tin=(r[3]||'').trim(), tout=(r[4]||'').trim();
       if(!code||!/^\d{4}-\d{2}-\d{2}$/.test(date)) return;
       PUNCHLOG[code]=PUNCHLOG[code]||{};
-      PUNCHLOG[code][date]={in:tin||null,out:tout||null};
+      PUNCHLOG[code][date]={in:tin||null,out:tout||null,real:true,src:'csv'}; // 【v76】CSV取込打刻は実打刻として保護（demo再生成・掃除の対象外）
       n++; months[date.slice(0,7)]=(months[date.slice(0,7)]||0)+1;
     });
     if(!n){alert('取り込める打刻行がありませんでした。CSV形式（コード,姓名,日付,出勤,退勤）をご確認ください。');return;}
