@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>クリニック タイムカード V74</title>
+<title>クリニック タイムカード V75</title>
 <style>
   :root{
     --bg:#10402c; --panel:#ffffff; --ink:#1f2a24; --muted:#6b7c72;
@@ -171,7 +171,7 @@
 <header class="app">
   <h1>
     <span class="brandlogo" id="brandLogo" title="iPad打刻画面に戻る"><span class="mark">🏥</span><span class="org">福耳会</span></span>
-    <span class="apptitle">クリニック タイムカード<span class="ver">V74</span></span>
+    <span class="apptitle">クリニック タイムカード<span class="ver">V75</span></span>
   </h1>
   <div class="roles">
     <button data-role="ipad" class="active">iPad打刻</button>
@@ -1088,12 +1088,22 @@ function parseImport(wrapped){
   if(ym)DEMO_MONTH=ym;
   buildDaySlots();      // 取り込んだ診療枠から日別の枠リストを構築
   purgeOtherMonths();   // 取込月以外の旧デモ打刻を消す
-  seedPunchFromPlan();
+  if(DEMO_SEED)seedPunchFromPlan();else purgeDemoPunches(); // 【v75】本番はデモ打刻を生成しない（URLに ?demo=1 を付けた画面のみ生成）
   IMPORT_INFO={at:new Date().toISOString(),month:ym,report:rep};
   refreshTodayPunchRecords();
   saveAvatarPref(); // 取り込んだアイコン設定を保存
   saveState();
   return {ym,rep};
+}
+// 【v75】デモモード判定：URLに ?demo=1 を付けたときだけ、取込時にサンプル打刻を自動生成する。
+// 本番運用では取込は「予定・診療枠・休診」だけを反映し、打刻は実打刻・CSV取込・修正申請のみを源泉とする。
+const DEMO_SEED=(()=>{try{return new URLSearchParams(location.search).get('demo')==='1';}catch(e){return false;}})();
+// 【v75】過去に自動生成されたデモ打刻(demo:true)を削除（実打刻 real / 手修正 edited は保持）
+function purgeDemoPunches(){
+  Object.keys(PUNCHLOG).forEach(code=>{
+    Object.keys(PUNCHLOG[code]).forEach(d=>{const r=PUNCHLOG[code][d];if(r&&r.demo)delete PUNCHLOG[code][d];});
+    if(!Object.keys(PUNCHLOG[code]).length)delete PUNCHLOG[code];
+  });
 }
 // 取り込んだ予定からサンプル打刻を生成（シフト側と統一したルール）
 //  出勤＝予定開始 −8〜+4分 / 退勤＝予定終了 −5〜+10分
@@ -1121,27 +1131,7 @@ function seedPunchFromPlan(){
     });
   });
 }
-// デモ用：当月の打刻ログを自動生成（保存が無い場合のみ）。日〜は休診、休診カレンダー対象日は除外
-function seedPunchLog(){
-  const [y,mo]=DEMO_MONTH.split('-').map(Number);
-  const days=new Date(y,mo,0).getDate();
-  STAFF.forEach((s,si)=>{
-    PUNCHLOG[s.id]=PUNCHLOG[s.id]||{};
-    for(let d=1;d<=days;d++){
-      const date=`${DEMO_MONTH}-${pad2(d)}`;
-      if(PUNCHLOG[s.id][date])continue;
-      const dow=new Date(y,mo-1,d).getDay();
-      if(dow===0)continue;                       // 日曜は休診
-      if(closureFor(s,date))continue;            // 診療カレンダーで休診の枠は出勤なし
-      const r1=rnd(si*7+d), r2=rnd(si*13+d*3);
-      if(r1<0.06)continue;                       // ごく稀に欠勤
-      const inMin=toMin(s.shift.s)+Math.round((r1-0.4)*16);   // 概ね定時前後
-      let outMin=toMin(s.shift.e)+Math.round((r2-0.3)*40);    // 退勤は遅れがち
-      if(r2>0.9)outMin+=60;                       // たまに大きめ残業
-      PUNCHLOG[s.id][date]={in:`${pad2(Math.floor(inMin/60))}:${pad2(inMin%60)}`,out:`${pad2(Math.floor(outMin/60))}:${pad2(outMin%60)}`};
-    }
-  });
-}
+// 【v75】旧デモ用 seedPunchLog() は未使用（死にコード）のため削除
 // 1か月を集計し、税理士CSV(18列)に対応した行配列を返す
 function aggregateMonthRows(ym,clinicFilter='all'){
   return STAFF.map(s=>{
