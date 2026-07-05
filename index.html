@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>クリニック タイムカード V82</title>
+<title>クリニック タイムカード V83</title>
 <style>
   :root{
     --bg:#10402c; --panel:#ffffff; --ink:#1f2a24; --muted:#6b7c72;
@@ -171,7 +171,7 @@
 <header class="app">
   <h1>
     <span class="brandlogo" id="brandLogo" title="iPad打刻画面に戻る"><span class="mark">🏥</span><span class="org">福耳会</span></span>
-    <span class="apptitle">クリニック タイムカード<span class="ver">V82</span></span>
+    <span class="apptitle">クリニック タイムカード<span class="ver">V83</span></span>
   </h1>
   <div class="roles">
     <button data-role="ipad" class="active">iPad打刻</button>
@@ -789,8 +789,9 @@ function inactiveStatusOn(code,date){
   if(!Array.isArray(rows))return null;
   for(const r of rows){
     if(!r||r.status==='在職')continue;
-    const from=r.from||'0000-01-01', to=r.to||'9999-12-31'; // ISO文字列比較
-    if(from<=date&&date<=to)return r.status;
+    if(!r.from)continue; // 【V83】開始日が空欄＝まだ有効化されていない（休眠）。シフトアプリv200と同一挙動
+    const to=r.to||'9999-12-31'; // ISO文字列比較（終了日空欄＝継続中）
+    if(r.from<=date&&date<=to)return r.status;
   }
   return null;
 }
@@ -2823,6 +2824,13 @@ CHANGELOG V82
   - exportCSV / downloadCSV（現行の exportMonthlyCSV / writeCSVFile に置き換わった旧CSV書き出しの残骸）
 - ※ setupAutoTilt はIIFE即時実行で使用中のため残している。hasPendingCorrection（承認前判定）は使用中のため残している。
 - アプリ表示バージョンを V81 から V82 に更新。
+-->
+<!--
+CHANGELOG V83
+- 在籍ステータスの開始日(from)が空欄の行は「休眠」扱いとし、欠勤除外に反映しない（シフトアプリv200と同一挙動）。
+  - 開始日が未定のまま登録された産休等が、誤って全期間の欠勤除外に効かないようにする。開始日が記入されたら、その日から有効化される。
+- inactiveStatusOn を修正（from空欄はスキップ）。
+- アプリ表示バージョンを V82 から V83 に更新。
 -->
 </body>
 </html>
