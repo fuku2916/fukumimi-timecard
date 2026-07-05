@@ -1031,7 +1031,7 @@ function parseJob(job,jobName,idx,rep){
     // 打刻画面の名簿に登録（全職種・コードが付いた人。重複はスキップ）
     if(r.code&&!IMPORT_STAFF.some(x=>x.id===r.code)){
       const pc=(STAFF_META[r.code]&&STAFF_META[r.code].payrollClinic)||importClinic;
-      IMPORT_STAFF.push({id:r.code, name:st.fullName||st.name||r.code, pin:st.pin||'', unit:jobName, loc:pc, payrollClinic:pc, rec:{in:null,out:null}});
+      IMPORT_STAFF.push({id:r.code, name:st.fullName||st.name||r.code, pin:st.pin||'', unit:jobName, emp:(st.cond&&st.cond.emp)||'parttime', loc:pc, payrollClinic:pc, rec:{in:null,out:null}});
     }
     rep.push({job:jobName,name:st.name,code:st.code||'',resolved:r.code,ok:r.ok,reason:r.reason});});
   // 診療カレンダーの担当医師：ドクター職種は給与コードが無くても名前を記録（麻酔科パート等）
@@ -1160,11 +1160,13 @@ function aggregateRangeRows(from,to,clinicFilter='all',unitFilter='all',q=''){
       const g=toMin(r.out)-toMin(r.in);if(g<=0)return;
       const b=autoBreak(g), nt=g-b;
       days++; net+=nt; brk+=b; ot+=Math.max(0,nt-480);
-      if(nb)night+=Math.max(0,Math.min(toMin(r.out),toMin(nb.e||nb.end))-Math.max(toMin(r.in),toMin(nb.s||nb.start)));
-      const sh=(plan&&plan[d])||(s.shift?{start:s.shift.s,end:s.shift.e}:null); // 予定シフト優先（予定が無い人は遅刻/早退を数えない）
+      if(nb)night+=Math.max(0,toMin(r.out)-Math.max(toMin(r.in),toMin(nb.s||nb.start))); // 夜勤務=夜診開始以降の労働すべて（終了時刻で打ち切らない）
+      const sh=plan?(plan[d]||null):(s.shift?{start:s.shift.s,end:s.shift.e}:null); // 予定表がある人は、予定のない日（休日出勤）を判定しない
       if(sh){
-        const din=toMin(r.in)-toMin(sh.start); if(din>TOL){lateN++;lateMin+=din;}
-        const dout=toMin(sh.end)-toMin(r.out); if(dout>TOL){earlyN++;earlyMin+=dout;}
+        const din=toMin(r.in)-toMin(sh.start); if(din>0){lateN++;lateMin+=din;} // 遅刻は猶予なし（1分でも過ぎたら遅刻）
+        if((s.emp||'parttime')==='fulltime'){ // 早退は常勤のみ判定。パートは「仕事が終われば退勤」のため判定しない
+          const dout=toMin(sh.end)-toMin(r.out); if(dout>0){earlyN++;earlyMin+=dout;}
+        }
       }
     });
     if(plan)Object.keys(plan).filter(d=>inR(d)&&includeDateForClinic(s,d,clinicFilter)).forEach(d=>{
@@ -1174,7 +1176,8 @@ function aggregateRangeRows(from,to,clinicFilter='all',unitFilter='all',q=''){
     });
     const usedLeave = (PAID[s.id]!=null)
       ? PAID[s.id].taken.filter(t=>inR(t.date||'')).reduce((a,t)=>a+(t.days||0),0)
-      : REQUESTS.filter(qr=>qr.staff==s.id&&qr.type==='leave'&&qr.status==='approved'&&inR(qr.date||'')).length;
+      : (lv?Object.keys(lv).filter(d=>inR(d)&&lv[d]==='paid').length:0)
+        + REQUESTS.filter(qr=>qr.staff==s.id&&qr.type==='leave'&&qr.status==='approved'&&inR(qr.date||'')).length;
     const remainLeave = paidRemain(s.id);
     return [s.id, s.name, locNameById(groupClinic)||locNameById(s.loc),
       days||'', absent||'', lateN||'', earlyN||'',
