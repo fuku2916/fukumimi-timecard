@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>クリニック タイムカード V81</title>
+<title>クリニック タイムカード V82</title>
 <style>
   :root{
     --bg:#10402c; --panel:#ffffff; --ink:#1f2a24; --muted:#6b7c72;
@@ -171,7 +171,7 @@
 <header class="app">
   <h1>
     <span class="brandlogo" id="brandLogo" title="iPad打刻画面に戻る"><span class="mark">🏥</span><span class="org">福耳会</span></span>
-    <span class="apptitle">クリニック タイムカード<span class="ver">V81</span></span>
+    <span class="apptitle">クリニック タイムカード<span class="ver">V82</span></span>
   </h1>
   <div class="roles">
     <button data-role="ipad" class="active">iPad打刻</button>
@@ -608,16 +608,9 @@ function buildDaySlots(){
     DAYSLOTS[d]=Object.values(DAYSLOTS[d]).sort((a,b)=>(a.s||'').localeCompare(b.s||''));
   });
 }
-function staffNameByCode(code){const s=(IMPORT_STAFF||[]).find(x=>x.id===code);return (s&&s.name)||CODE_NAME[code]||code;}
 function surnameOf(name){return String(name||'').split(/[\s　]/)[0];}  // 苗字だけ（半角/全角スペース対応）
 function colorByName(name){return PALETTE[hashId(String(name||''))%PALETTE.length];}
 // 担当医師を「苗字だけの楕円ピル」で表示（DOC_ASSIGN＝ドクター職種の割り当て。給与コード不要）
-function doctorPillsFor(date,slotId){
-  const names=(DOC_ASSIGN[date]&&DOC_ASSIGN[date][slotId])||[];
-  if(!names.length)return '<span class="muted">—</span>';
-  const pills=names.map(n=>`<span class="docpill" style="background:${colorByName(n)}">${surnameOf(n)}</span>`).join('');
-  return `<div class="docwrap">${pills}</div>`;  // 幅を超えたら自動で折り返す
-}
 // その日の休診枠ラベル一覧（カレンダー表示用）
 function closedCells(date){
   return displayDaySlots(date).filter(sl=>isCancelledAny(date,sl)).map(sl=>({label:sl.label||sl.id}));
@@ -814,7 +807,6 @@ ADMIN_PW=normalizePasswordInput(ADMIN_PW);
 function unitDays(u){u=String(u||'full');return /half|am|pm|0\.5|半/.test(u)?0.5:1;}
 function paidGranted(code){return PAID[code]?Number(PAID[code].granted)||0:null;}
 function paidUsedTotal(code){const p=PAID[code];return p?p.taken.reduce((s,t)=>s+(t.days||0),0):0;}
-function paidUsedInMonth(code,ym){const p=PAID[code];return p?p.taken.filter(t=>(t.date||'').startsWith(ym)).reduce((s,t)=>s+(t.days||0),0):0;}
 function paidRemain(code){const g=paidGranted(code);return g==null?null:g-paidUsedTotal(code);}
 async function sbLogin(pw){
   const r=await fetch(SB_URL+'/auth/v1/token?grant_type=password',
@@ -933,7 +925,6 @@ function correctionFor(code,date,status){
   return allCorrections().find(c=>String(c.code)===String(code)&&String(c.date)===String(date)&&(!status||(c.status||'pending')===status));
 }
 function hasPendingCorrection(code,date){return !!correctionFor(code,date,'pending');}
-function hasApprovedCorrection(code,date){return !!correctionFor(code,date,'approved');}
 // 【V81】absenceReasonFor は呼び出し箇所ゼロの未使用関数だったため削除（v78で欠勤表示が personalDailyRows / aggregateRangeRows に直接実装された際の残骸）
 
 /* ===== 本人データのクラウド保存／取得（timecard_data テーブル, 行 id='main'） =====
@@ -2469,21 +2460,6 @@ async function decideCorrection(unit,idx,status){
     toast(status==='approved'?'承認し打刻へ反映（ローカル）。合言葉設定後にクラウド反映されます':'却下（ローカル）');
   }
 }
-function exportCSV(){
-  const rows=[['拠点','日付','氏名','診療枠','出勤','退勤','実働(分)',...(WAGE_BANDS[curLoc]||[]).map(b=>`${b.label}(分)`)]];
-  locStaff().forEach(s=>{const bs=bandSplit(s.rec,curLoc);
-    rows.push([LOCATIONS.find(l=>l.id===curLoc).name,today,s.name,s.slot,s.rec?.in||'',s.rec?.out||'',netWork(s.rec)??'',...Object.values(bs)]);
-  });
-  const csv='﻿'+rows.map(r=>r.join(',')).join('\n');
-  const blob=new Blob([csv],{type:'text/csv'});const url=URL.createObjectURL(blob);
-  const a=document.createElement('a');a.href=url;a.download=`勤怠明細_${curLoc}_${today}.csv`;a.click();URL.revokeObjectURL(url);
-  toast('日別明細CSVを書き出しました');
-}
-function downloadCSV(rows,name){
-  const csv='﻿'+rows.map(r=>r.join(',')).join('\n');
-  const blob=new Blob([csv],{type:'text/csv'});const url=URL.createObjectURL(blob);
-  const a=document.createElement('a');a.href=url;a.download=name;a.click();URL.revokeObjectURL(url);
-}
 // 税理士事務所提出CSV（実フォーマット18列・全クリニック・BOM付きUTF-8・CRLF）
 function csvCell(v){v=(v==null)?'':String(v);return /[",\r\n]/.test(v)?'"'+v.replace(/"/g,'""')+'"':v;}
 function writeCSVFile(dataRows,name){
@@ -2839,6 +2815,14 @@ CHANGELOG V81
   - personalDailyRows（個人別明細）の日別ステータスは「欠勤」ではなくステータス名（休職等）を表示。
 - 未使用関数 absenceReasonFor を削除（呼び出し箇所ゼロ。v78で欠勤表示が実装し直された際の残骸）。
 - アプリ表示バージョンを V80 から V81 に更新。
+-->
+<!--
+CHANGELOG V82
+- 未使用関数を6件削除（コード掃除。挙動は変えていない）:
+  - staffNameByCode / doctorPillsFor / paidUsedInMonth / hasApprovedCorrection（呼び出し箇所ゼロ）
+  - exportCSV / downloadCSV（現行の exportMonthlyCSV / writeCSVFile に置き換わった旧CSV書き出しの残骸）
+- ※ setupAutoTilt はIIFE即時実行で使用中のため残している。hasPendingCorrection（承認前判定）は使用中のため残している。
+- アプリ表示バージョンを V81 から V82 に更新。
 -->
 </body>
 </html>
