@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>クリニック タイムカード V79</title>
+<title>クリニック タイムカード V80</title>
 <style>
   :root{
     --bg:#10402c; --panel:#ffffff; --ink:#1f2a24; --muted:#6b7c72;
@@ -171,7 +171,7 @@
 <header class="app">
   <h1>
     <span class="brandlogo" id="brandLogo" title="iPad打刻画面に戻る"><span class="mark">🏥</span><span class="org">福耳会</span></span>
-    <span class="apptitle">クリニック タイムカード<span class="ver">V79</span></span>
+    <span class="apptitle">クリニック タイムカード<span class="ver">V80</span></span>
   </h1>
   <div class="roles">
     <button data-role="ipad" class="active">iPad打刻</button>
@@ -1031,7 +1031,7 @@ function parseJob(job,jobName,idx,rep){
     // 打刻画面の名簿に登録（全職種・コードが付いた人。重複はスキップ）
     if(r.code&&!IMPORT_STAFF.some(x=>x.id===r.code)){
       const pc=(STAFF_META[r.code]&&STAFF_META[r.code].payrollClinic)||importClinic;
-      IMPORT_STAFF.push({id:r.code, name:st.fullName||st.name||r.code, pin:st.pin||'', unit:jobName, emp:(st.cond&&st.cond.emp)||'parttime', loc:pc, payrollClinic:pc, rec:{in:null,out:null}});
+      IMPORT_STAFF.push({id:r.code, name:st.fullName||st.name||r.code, pin:st.pin||'', unit:jobName, emp:(st.cond&&st.cond.emp)||'parttime', noJudge:(jobName==='doctor')||!!(st.cond&&st.cond.noLateEarly), loc:pc, payrollClinic:pc, rec:{in:null,out:null}}); // 【v80】noJudge=遅刻・早退を判定しない（医師は自動、他はシフトアプリの職員条件から）
     }
     rep.push({job:jobName,name:st.name,code:st.code||'',resolved:r.code,ok:r.ok,reason:r.reason});});
   // 診療カレンダーの担当医師：ドクター職種は給与コードが無くても名前を記録（麻酔科パート等）
@@ -1164,7 +1164,7 @@ function aggregateRangeRows(from,to,clinicFilter='all',unitFilter='all',q=''){
       days++; net+=nt; brk+=b; ot+=Math.max(0,nt-480);
       if(nb)night+=Math.max(0,toMin(r.out)-Math.max(toMin(r.in),toMin(nb.s||nb.start))); // 夜勤務=夜診開始以降の労働すべて（終了時刻で打ち切らない）
       const sh=plan?(plan[d]||null):(s.shift?{start:s.shift.s,end:s.shift.e}:null); // 予定表がある人は、予定のない日（休日出勤）を判定しない
-      if(sh){
+      if(sh&&!s.noJudge){ // 【v80】noJudge職員（医師・手術担当等）は遅刻・早退を判定しない
         const lateBase=(lv&&lv[d]==='paid_pm')?Math.max(toMin(sh.start),toMin((nb&&(nb.s||nb.start))||'15:45')):toMin(sh.start); // 【v78】半有(午前有休)の日は午後コマ開始(夜診)を基準に遅刻判定
         const din=toMin(r.in)-lateBase; if(din>0){lateN++;lateMin+=din;} // 遅刻は猶予なし（1分でも過ぎたら遅刻）
         if((s.emp||'parttime')==='fulltime'){ // 早退は常勤のみ判定。パートは「仕事が終われば退勤」のため判定しない
