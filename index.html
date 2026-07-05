@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>クリニック タイムカード V77</title>
+<title>クリニック タイムカード V78</title>
 <style>
   :root{
     --bg:#10402c; --panel:#ffffff; --ink:#1f2a24; --muted:#6b7c72;
@@ -171,7 +171,7 @@
 <header class="app">
   <h1>
     <span class="brandlogo" id="brandLogo" title="iPad打刻画面に戻る"><span class="mark">🏥</span><span class="org">福耳会</span></span>
-    <span class="apptitle">クリニック タイムカード<span class="ver">V77</span></span>
+    <span class="apptitle">クリニック タイムカード<span class="ver">V78</span></span>
   </h1>
   <div class="roles">
     <button data-role="ipad" class="active">iPad打刻</button>
@@ -923,7 +923,7 @@ function hasApprovedCorrection(code,date){return !!correctionFor(code,date,'appr
 function absenceReasonFor(code,date,s){
   const punched=PUNCHLOG[code]&&PUNCHLOG[code][date]&&PUNCHLOG[code][date].in&&PUNCHLOG[code][date].out;
   if(punched)return '';
-  if(LEAVEPLAN[code]&&LEAVEPLAN[code][date])return LEAVEPLAN[code][date]==='paid'?'有給':'休み';
+  if(LEAVEPLAN[code]&&LEAVEPLAN[code][date])return LEAVEPLAN[code][date]==='paid'?'有給':LEAVEPLAN[code][date]==='paid_pm'?'半有':'休み'; // 【v78】
   if(isClosedDay(date)||closureFor(s,date))return '休診';
   if(hasPendingCorrection(code,date))return '修正申請中';
   return '欠勤疑い';
@@ -1061,7 +1061,7 @@ function parseJob(job,jobName,idx,rep){
     });
   });
   Object.entries(job.tmps||{}).forEach(([date,obj])=>Object.entries(obj||{}).forEach(([id,v])=>{
-    if(v&&(v.type==='off'||v.type==='paid')){const code=id2code[id];if(code){LEAVEPLAN[code]=LEAVEPLAN[code]||{};LEAVEPLAN[code][date]=v.type;}}
+    if(v&&(v.type==='off'||v.type==='paid'||v.type==='paid_pm')){const code=id2code[id];if(code){LEAVEPLAN[code]=LEAVEPLAN[code]||{};LEAVEPLAN[code][date]=v.type;}} // 【v78】半有(paid_pm)も記録する
   }));
   Object.entries(job.paidLeave||{}).forEach(([id,v])=>{
     const code=id2code[id];if(!code)return;
@@ -1163,7 +1163,8 @@ function aggregateRangeRows(from,to,clinicFilter='all',unitFilter='all',q=''){
       if(nb)night+=Math.max(0,toMin(r.out)-Math.max(toMin(r.in),toMin(nb.s||nb.start))); // 夜勤務=夜診開始以降の労働すべて（終了時刻で打ち切らない）
       const sh=plan?(plan[d]||null):(s.shift?{start:s.shift.s,end:s.shift.e}:null); // 予定表がある人は、予定のない日（休日出勤）を判定しない
       if(sh){
-        const din=toMin(r.in)-toMin(sh.start); if(din>0){lateN++;lateMin+=din;} // 遅刻は猶予なし（1分でも過ぎたら遅刻）
+        const lateBase=(lv&&lv[d]==='paid_pm')?Math.max(toMin(sh.start),toMin((nb&&(nb.s||nb.start))||'15:45')):toMin(sh.start); // 【v78】半有(午前有休)の日は午後コマ開始(夜診)を基準に遅刻判定
+        const din=toMin(r.in)-lateBase; if(din>0){lateN++;lateMin+=din;} // 遅刻は猶予なし（1分でも過ぎたら遅刻）
         if((s.emp||'parttime')==='fulltime'){ // 早退は常勤のみ判定。パートは「仕事が終われば退勤」のため判定しない
           const dout=toMin(sh.end)-toMin(r.out); if(dout>0){earlyN++;earlyMin+=dout;}
         }
@@ -1176,7 +1177,7 @@ function aggregateRangeRows(from,to,clinicFilter='all',unitFilter='all',q=''){
     });
     const usedLeave = (PAID[s.id]!=null)
       ? PAID[s.id].taken.filter(t=>inR(t.date||'')).reduce((a,t)=>a+(t.days||0),0)
-      : (lv?Object.keys(lv).filter(d=>inR(d)&&lv[d]==='paid').length:0)
+      : (lv?Object.keys(lv).filter(d=>inR(d)).reduce((a,d)=>a+(lv[d]==='paid'?1:lv[d]==='paid_pm'?0.5:0),0):0) // 【v78】半有は0.5日
         + REQUESTS.filter(qr=>qr.staff==s.id&&qr.type==='leave'&&qr.status==='approved'&&inR(qr.date||'')).length;
     const remainLeave = paidRemain(s.id);
     return [s.id, s.name, locNameById(groupClinic)||locNameById(s.loc),
@@ -1216,7 +1217,7 @@ function personalDailyRows(code,from,to){
     const dow=dt.getDay();
     const punched=!!(r&&r.in&&r.out);
     let status='';
-    if(!punched){status=leave==='paid'?'有給':leave==='off'?'休み':(isClosedDay(d)||SHIFT_CLOSED[d])?'休診':sh?'欠勤':'';}
+    if(!punched){status=leave==='paid'?'有給':leave==='paid_pm'?'半有':leave==='off'?'休み':(isClosedDay(d)||SHIFT_CLOSED[d])?'休診':sh?'欠勤':'';} // 【v78】
     let net=0,b=0,ot=0,outside=0,night=0;
     if(punched){
       const g=toMin(r.out)-toMin(r.in);
