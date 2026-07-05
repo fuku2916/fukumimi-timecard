@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>クリニック タイムカード V78</title>
+<title>クリニック タイムカード V79</title>
 <style>
   :root{
     --bg:#10402c; --panel:#ffffff; --ink:#1f2a24; --muted:#6b7c72;
@@ -171,7 +171,7 @@
 <header class="app">
   <h1>
     <span class="brandlogo" id="brandLogo" title="iPad打刻画面に戻る"><span class="mark">🏥</span><span class="org">福耳会</span></span>
-    <span class="apptitle">クリニック タイムカード<span class="ver">V78</span></span>
+    <span class="apptitle">クリニック タイムカード<span class="ver">V79</span></span>
   </h1>
   <div class="roles">
     <button data-role="ipad" class="active">iPad打刻</button>
@@ -1132,7 +1132,9 @@ function seedPunchFromPlan(){
 // from/to は 'YYYY-MM-DD'（両端を含む）。給与締め（11日〜翌月10日）のような月跨ぎ期間に対応。
 function tcSearchPeople(){
   const seen=new Set(),people=[];
-  [...STAFF,...(IMPORT_STAFF||[])].forEach(s=>{const k=String(s.id);if(!seen.has(k)){seen.add(k);people.push(s);}});
+  // 【v79】取り込み済み名簿(IMPORT_STAFF)を優先。デモ名簿(STAFF)が同一コードを持つ場合、
+  // 従来はデモ側が勝って emp(常勤/パート)等の取込情報が失われ、早退判定が働かなかった。
+  [...(IMPORT_STAFF||[]),...STAFF].forEach(s=>{const k=String(s.id);if(!seen.has(k)){seen.add(k);people.push(s);}});
   return people;
 }
 function staffBelongsToClinic(s,cf){
