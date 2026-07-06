@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>クリニック タイムカード V83</title>
+<title>クリニック タイムカード V84</title>
 <style>
   :root{
     --bg:#10402c; --panel:#ffffff; --ink:#1f2a24; --muted:#6b7c72;
@@ -171,7 +171,7 @@
 <header class="app">
   <h1>
     <span class="brandlogo" id="brandLogo" title="iPad打刻画面に戻る"><span class="mark">🏥</span><span class="org">福耳会</span></span>
-    <span class="apptitle">クリニック タイムカード<span class="ver">V83</span></span>
+    <span class="apptitle">クリニック タイムカード<span class="ver">V84</span></span>
   </h1>
   <div class="roles">
     <button data-role="ipad" class="active">iPad打刻</button>
@@ -307,7 +307,6 @@ const WAGE_BANDS = {
 // 起動時に固定されるため、iPad付けっぱなし運用では翌日以降も古い日付に打刻されていた。
 function todayStr(){const d=new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}
 Object.defineProperty(window,'today',{get:todayStr}); // 既存コードの today 参照は常に最新のローカル日付を返す
-function hm(s){return s} // helper passthrough
 
 // スタッフ（勤務開始日・希望就業時間・本日のシフト/実打刻つき）
 let STAFF = [{"id": "0001002", "name": "大滝 雅子", "loc": "ekimae", "slot": "夜外来", "shift": {"s": "13:00", "e": "22:00"}, "rec": {"in": "08:58", "out": null}}, {"id": "0001004", "name": "小島 憲", "loc": "iguchi", "slot": "午前外来", "shift": {"s": "09:00", "e": "18:00"}, "rec": {"in": "09:05", "out": null}}, {"id": "0001012", "name": "山地 かえ子", "loc": "iguchi", "slot": "午前外来", "shift": {"s": "09:00", "e": "18:00"}, "rec": {"in": "08:50", "out": "18:10"}}, {"id": "0001015", "name": "高野 篤子", "loc": "iguchi", "slot": "午前外来", "shift": {"s": "09:00", "e": "18:00"}, "rec": {"in": null, "out": null}}, {"id": "0001020", "name": "水鳥 和美", "loc": "iguchi", "slot": "午前外来", "shift": {"s": "09:00", "e": "18:00"}, "rec": {"in": "08:58", "out": null}}, {"id": "0001021", "name": "宮城 喜代子", "loc": "iguchi", "slot": "午前外来", "shift": {"s": "09:00", "e": "18:00"}, "rec": {"in": "09:05", "out": null}}, {"id": "0001031", "name": "伊藤 壽一", "loc": "iguchi", "slot": "午前外来", "shift": {"s": "09:00", "e": "18:00"}, "rec": {"in": "08:50", "out": "18:10"}}, {"id": "0001036", "name": "中川 茉耶", "loc": "ekimae", "slot": "午前外来", "shift": {"s": "09:00", "e": "18:00"}, "rec": {"in": null, "out": null}}, {"id": "0001041", "name": "芳賀 ゆき", "loc": "iguchi", "slot": "夜外来", "shift": {"s": "13:00", "e": "22:00"}, "rec": {"in": "08:58", "out": null}}, {"id": "0001075", "name": "吉田 美帆", "loc": "ekimae", "slot": "午前外来", "shift": {"s": "09:00", "e": "18:00"}, "rec": {"in": "09:05", "out": null}}, {"id": "0001123", "name": "竹内 万理恵", "loc": "iguchi", "slot": "午前外来", "shift": {"s": "09:00", "e": "18:00"}, "rec": {"in": "08:50", "out": "18:10"}}, {"id": "0001124", "name": "森 亜弓", "loc": "iguchi", "slot": "午前外来", "shift": {"s": "09:00", "e": "18:00"}, "rec": {"in": null, "out": null}}, {"id": "0001125", "name": "藤田 琴恵", "loc": "ekimae", "slot": "午前外来", "shift": {"s": "09:00", "e": "18:00"}, "rec": {"in": "08:58", "out": null}}, {"id": "0001127", "name": "藤井 あおい", "loc": "iguchi", "slot": "午前外来", "shift": {"s": "09:00", "e": "18:00"}, "rec": {"in": "09:05", "out": null}}, {"id": "0001133", "name": "小形 知恵子", "loc": "iguchi", "slot": "午前外来", "shift": {"s": "09:00", "e": "18:00"}, "rec": {"in": "08:50", "out": "18:10"}}, {"id": "0001134", "name": "小池 陽子", "loc": "ekimae", "slot": "午前外来", "shift": {"s": "09:00", "e": "18:00"}, "rec": {"in": null, "out": null}}, {"id": "0001142", "name": "藤井 ひな乃", "loc": "ekimae", "slot": "午前外来", "shift": {"s": "09:00", "e": "18:00"}, "rec": {"in": "08:58", "out": null}}, {"id": "0001150", "name": "山本 さゆり", "loc": "ekimae", "slot": "午前外来", "shift": {"s": "09:00", "e": "18:00"}, "rec": {"in": "09:05", "out": null}}, {"id": "0001157", "name": "伊藤 有美", "loc": "demachi", "slot": "午前外来", "shift": {"s": "09:00", "e": "18:00"}, "rec": {"in": "08:50", "out": "18:10"}}, {"id": "0001164", "name": "松原 由歩", "loc": "ekimae", "slot": "午前外来", "shift": {"s": "09:00", "e": "18:00"}, "rec": {"in": null, "out": null}}, {"id": "0001165", "name": "菅 早知子", "loc": "ekimae", "slot": "午前外来", "shift": {"s": "09:00", "e": "18:00"}, "rec": {"in": "08:58", "out": null}}, {"id": "0001167", "name": "勝本 暢子", "loc": "ekimae", "slot": "午前外来", "shift": {"s": "09:00", "e": "18:00"}, "rec": {"in": "09:05", "out": null}}, {"id": "0001169", "name": "橋口 弘美", "loc": "ekimae", "slot": "午前外来", "shift": {"s": "09:00", "e": "18:00"}, "rec": {"in": "08:50", "out": "18:10"}}, {"id": "0001174", "name": "西條 美和", "loc": "karasuma", "slot": "午前外来", "shift": {"s": "09:00", "e": "18:00"}, "rec": {"in": null, "out": null}}, {"id": "0001181", "name": "西本 仁", "loc": "ekimae", "slot": "午前外来", "shift": {"s": "09:00", "e": "18:00"}, "rec": {"in": "08:58", "out": null}}, {"id": "0001182", "name": "小出 有紗", "loc": "iguchi", "slot": "午前外来", "shift": {"s": "09:00", "e": "18:00"}, "rec": {"in": "09:05", "out": null}}, {"id": "0001187", "name": "古川 央樹", "loc": "demachi", "slot": "午前外来", "shift": {"s": "09:00", "e": "18:00"}, "rec": {"in": "08:50", "out": "18:10"}}, {"id": "0001189", "name": "伊藤 英介", "loc": "demachi", "slot": "午前外来", "shift": {"s": "09:00", "e": "18:00"}, "rec": {"in": null, "out": null}}, {"id": "0001190", "name": "森岡 依子", "loc": "demachi", "slot": "午前外来", "shift": {"s": "09:00", "e": "18:00"}, "rec": {"in": "08:58", "out": null}}, {"id": "0001191", "name": "山本 正仁", "loc": "demachi", "slot": "午前外来", "shift": {"s": "09:00", "e": "18:00"}, "rec": {"in": "09:05", "out": null}}, {"id": "0001192", "name": "山本 明代", "loc": "demachi", "slot": "午前外来", "shift": {"s": "09:00", "e": "18:00"}, "rec": {"in": "08:50", "out": "18:10"}}, {"id": "0001193", "name": "矢野 文季子", "loc": "ekimae", "slot": "午前外来", "shift": {"s": "09:00", "e": "18:00"}, "rec": {"in": null, "out": null}}, {"id": "0001194", "name": "松枝 知美", "loc": "ekimae", "slot": "夜外来", "shift": {"s": "13:00", "e": "22:00"}, "rec": {"in": "08:58", "out": null}}, {"id": "0001195", "name": "大門 寿美代", "loc": "demachi", "slot": "午前外来", "shift": {"s": "09:00", "e": "18:00"}, "rec": {"in": "09:05", "out": null}}, {"id": "0001199", "name": "丸岡 詩織", "loc": "demachi", "slot": "午前外来", "shift": {"s": "09:00", "e": "18:00"}, "rec": {"in": "08:50", "out": "18:10"}}, {"id": "0001202", "name": "小村 綾子", "loc": "iguchi", "slot": "午前外来", "shift": {"s": "09:00", "e": "18:00"}, "rec": {"in": null, "out": null}}, {"id": "0001205", "name": "加藤 日菜子", "loc": "ekimae", "slot": "夜外来", "shift": {"s": "13:00", "e": "22:00"}, "rec": {"in": "08:58", "out": null}}, {"id": "0001209", "name": "鈴木 直子", "loc": "karasuma", "slot": "午前外来", "shift": {"s": "09:00", "e": "18:00"}, "rec": {"in": "09:05", "out": null}}, {"id": "0001211", "name": "井上 圭", "loc": "karasuma", "slot": "午前外来", "shift": {"s": "09:00", "e": "18:00"}, "rec": {"in": "08:50", "out": "18:10"}}, {"id": "0001217", "name": "久保野 鞠子", "loc": "iguchi", "slot": "午前外来", "shift": {"s": "09:00", "e": "18:00"}, "rec": {"in": null, "out": null}}, {"id": "0001218", "name": "杉本 京子", "loc": "ekimae", "slot": "午前外来", "shift": {"s": "09:00", "e": "18:00"}, "rec": {"in": "08:58", "out": null}}, {"id": "0001219", "name": "永井 咲羽", "loc": "ekimae", "slot": "夜外来", "shift": {"s": "13:00", "e": "22:00"}, "rec": {"in": "09:05", "out": null}}, {"id": "0001220", "name": "北尾 茉衣", "loc": "ekimae", "slot": "夜外来", "shift": {"s": "13:00", "e": "22:00"}, "rec": {"in": "08:50", "out": "18:10"}}, {"id": "0001221", "name": "藤田 正子", "loc": "karasuma", "slot": "午前外来", "shift": {"s": "09:00", "e": "18:00"}, "rec": {"in": null, "out": null}}, {"id": "0001222", "name": "岐美 裕子", "loc": "karasuma", "slot": "午前外来", "shift": {"s": "09:00", "e": "18:00"}, "rec": {"in": "08:58", "out": null}}, {"id": "0001223", "name": "舟見 恵子", "loc": "iguchi", "slot": "午前外来", "shift": {"s": "09:00", "e": "18:00"}, "rec": {"in": "09:05", "out": null}}, {"id": "0001224", "name": "北口 彩奈", "loc": "ekimae", "slot": "午前外来", "shift": {"s": "09:00", "e": "18:00"}, "rec": {"in": "08:50", "out": "18:10"}}, {"id": "0001225", "name": "仲川 真希", "loc": "ekimae", "slot": "夜外来", "shift": {"s": "13:00", "e": "22:00"}, "rec": {"in": null, "out": null}}, {"id": "0001227", "name": "小田 なつみ", "loc": "ekimae", "slot": "夜外来", "shift": {"s": "13:00", "e": "22:00"}, "rec": {"in": "08:58", "out": null}}, {"id": "0001228", "name": "川江 清子", "loc": "iguchi", "slot": "午前外来", "shift": {"s": "09:00", "e": "18:00"}, "rec": {"in": "09:05", "out": null}}, {"id": "0001229", "name": "米澤 佳絵", "loc": "karasuma", "slot": "午前外来", "shift": {"s": "09:00", "e": "18:00"}, "rec": {"in": "08:50", "out": "18:10"}}, {"id": "0001231", "name": "大江 健吾", "loc": "ekimae", "slot": "午前外来", "shift": {"s": "09:00", "e": "18:00"}, "rec": {"in": null, "out": null}}];
@@ -354,11 +353,6 @@ let SURGERY_FLAGS={}; // date -> {am:boolean, pm:boolean}（Googleカレンダ�
 let OUTPATIENT_CLOSURES={}; // date -> slotId -> roomIdx -> true/false（外来診察室の開閉）
 let CANCELLED={};
 function isCancelled(date,slotId){return !!(CANCELLED[date]&&CANCELLED[date][slotId]);}
-function toggleCancel(date,slotId){
-  CANCELLED[date]=CANCELLED[date]||{};
-  if(CANCELLED[date][slotId])delete CANCELLED[date][slotId]; else CANCELLED[date][slotId]=true;
-  saveState();renderCalMonth();renderCalDetail();
-}
 // 取り込んだ予定(SHIFTPLAN)から、日付ごとの診療枠リストを構築
 function normalizeSurgeryFlags(raw){
   const src=(raw&&raw.surgeryFlags)||raw?.data||raw?.flags||raw||{};
@@ -472,13 +466,6 @@ function outpatientRoomCountForSlot(slot){
   const label=(slot&&slot.label||'').toString();
   if(label.indexOf('昼外来')>=0)return 1;
   return 2;
-}
-function outpatientRoomClosed(date,slotId,roomIdx,dayClosed){
-  const day=OUTPATIENT_CLOSURES&&OUTPATIENT_CLOSURES[date];
-  const sl=day&&day[slotId];
-  if(sl&&Object.prototype.hasOwnProperty.call(sl,String(roomIdx)))return !!sl[String(roomIdx)];
-  if(dayClosed)return true;
-  return false;
 }
 // v67: シフト管理アプリの外来1診/2診分割に完全対応。
 // 集約表示された「午前外来」グループでも、各診察室の元スロットID(_slots)を見て開閉を判定する。
@@ -1291,18 +1278,6 @@ function statutoryLeave(hire){
 }
 
 // 時間帯別（通常/夜）労働時間を分で
-function bandSplit(rec,loc){
-  const out={};(WAGE_BANDS[loc]||[]).forEach(b=>out[b.label]=0);
-  if(!rec||!rec.in||!rec.out)return out;
-  const ci=toMin(rec.in),co=toMin(rec.out);
-  (WAGE_BANDS[loc]||[]).forEach(b=>{
-    const bs=toMin(b.start),be=toMin(b.end);
-    const ov=Math.max(0,Math.min(co,be)-Math.max(ci,bs));
-    out[b.label]=ov;
-  });
-  return out;
-}
-
 /* 差異判定 */
 function diffStatus(s){
   if(!s.rec||!s.rec.in)return{tags:[{t:'未打刻',c:'over'}]};
@@ -2831,6 +2806,15 @@ CHANGELOG V83
   - 開始日が未定のまま登録された産休等が、誤って全期間の欠勤除外に効かないようにする。開始日が記入されたら、その日から有効化される。
 - inactiveStatusOn を修正（from空欄はスキップ）。
 - アプリ表示バージョンを V82 から V83 に更新。
+-->
+<!--
+CHANGELOG V84
+- 未使用関数を4件削除（コード掃除。挙動は変えていない）:
+  - hm（値をそのまま返すだけのpassthrough。呼び出し箇所ゼロ）
+  - toggleCancel（toggleCancelGroup に置き換わった旧・休診切替の残骸）
+  - outpatientRoomClosed（v67で outpatientRoomClosedForDisplay に置き換わった旧・診察室開閉判定の残骸）
+  - bandSplit（呼び出し箇所ゼロ。WAGE_BANDS 自体は夜外来判定で使用中のため残す）
+- アプリ表示バージョンを V83 から V84 に更新。
 -->
 </body>
 </html>
