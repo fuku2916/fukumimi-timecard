@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>クリニック タイムカード V84</title>
+<title>クリニック タイムカード V85</title>
 <style>
   :root{
     --bg:#10402c; --panel:#ffffff; --ink:#1f2a24; --muted:#6b7c72;
@@ -171,7 +171,7 @@
 <header class="app">
   <h1>
     <span class="brandlogo" id="brandLogo" title="iPad打刻画面に戻る"><span class="mark">🏥</span><span class="org">福耳会</span></span>
-    <span class="apptitle">クリニック タイムカード<span class="ver">V84</span></span>
+    <span class="apptitle">クリニック タイムカード<span class="ver">V85</span></span>
   </h1>
   <div class="roles">
     <button data-role="ipad" class="active">iPad打刻</button>
@@ -757,6 +757,41 @@ function normHM(t){const[a,b]=String(t).split(':');return `${pad2(Number(a))}:${
 function hmOf(min){return `${pad2(Math.floor(min/60))}:${pad2(min%60)}`;}
 
 /* ===== シフト管理アプリ(クラウド/JSON)取り込み ===== */
+// ── 【V85】アプリ自動更新（古い端末がキャッシュされた旧版を表示し続けるのを防ぐ。シフトアプリと同方式）──
+const TC_APP_VERSION='V85';
+function tcForceReloadLatest(){
+  try{
+    const sp=new URLSearchParams(location.search);
+    sp.set('_r',Date.now().toString()); // 毎回変わる値でキャッシュ回避
+    location.replace(location.pathname+'?'+sp.toString()+location.hash);
+  }catch(e){ try{location.reload();}catch(_){} }
+}
+async function tcFetchLatestVersion(){
+  try{
+    const res=await fetch(location.pathname+'?_cv='+Date.now(),{cache:'no-store',headers:{'Range':'bytes=0-8191'}});
+    if(!res.ok&&res.status!==206)return null;
+    const txt=await res.text();
+    const m=txt.match(/クリニック タイムカード (V\d+)/);
+    return m?m[1]:null;
+  }catch(e){ return null; }
+}
+(function(){
+  const check=async()=>{
+    const latest=await tcFetchLatestVersion();
+    if(latest&&latest!==TC_APP_VERSION){
+      let already='';try{already=sessionStorage.getItem('tc_autoReloadedTo')||'';}catch(e){}
+      if(already!==latest){
+        try{sessionStorage.setItem('tc_autoReloadedTo',latest);}catch(e){}
+        tcForceReloadLatest();
+      }
+    }
+  };
+  check(); // 起動時
+  setInterval(check,120000); // 2分ごと
+  document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')check();});
+  window.addEventListener('pageshow',check);
+})();
+
 const SB_URL='https://hwctwbnzjjdllqsmlvqm.supabase.co';
 const SB_ANON='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imh3Y3R3Ym56ampkbGxxc21sdnFtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA4NzkzMDQsImV4cCI6MjA5NjQ1NTMwNH0.quP2UmR59c1ULUgZkqaq0kzeD8VlOY3cKH4ZaZJwtf0';
 let SHIFTPLAN={};   // code -> date -> {start,end,slots}
@@ -824,7 +859,7 @@ async function sbFetchShift(token){
   const ids=clinic?[clinic,'main']:['main']; // まず現在選択中の院、だめなら旧mainへフォールバック
   for(const rid of ids){
     const r=await fetch(SB_URL+'/rest/v1/shift_data?id=eq.'+encodeURIComponent(rid)+'&select=data',
-      {headers:{apikey:SB_ANON,Authorization:'Bearer '+token}});
+      {cache:'no-store',headers:{apikey:SB_ANON,Authorization:'Bearer '+token,'Cache-Control':'no-cache',Pragma:'no-cache'}});
     if(!r.ok)continue;
     const rows=await r.json();
     const all=(rows[0]&&rows[0].data)||null;
@@ -866,7 +901,7 @@ async function cloudImport(pw){
    data[unit] = { requests:{}, avatars:{code:{color,shape,icon}}, timecardCorrections:[...] } */
 async function fetchRequestsData(token){
   const r=await fetch(SB_URL+'/rest/v1/requests_data?id=eq.main&select=data',
-    {headers:{apikey:SB_ANON,Authorization:'Bearer '+token}});
+    {cache:'no-store',headers:{apikey:SB_ANON,Authorization:'Bearer '+token,'Cache-Control':'no-cache',Pragma:'no-cache'}});
   if(!r.ok)throw new Error('requests_data取得失敗('+r.status+')');
   const rows=await r.json();
   REQ_DATA=(rows[0]&&rows[0].data)||{};
@@ -944,7 +979,7 @@ async function pushCloud(pw){
 async function pullCloudStaff(pw,code){
   const t=await sbLogin(pw);
   const r=await fetch(SB_URL+'/rest/v1/timecard_data?id=eq.main&select=data',
-    {headers:{apikey:SB_ANON,Authorization:'Bearer '+t}});
+    {cache:'no-store',headers:{apikey:SB_ANON,Authorization:'Bearer '+t,'Cache-Control':'no-cache',Pragma:'no-cache'}});
   if(!r.ok)throw new Error('取得失敗（'+r.status+'）');
   const rows=await r.json();const all=(rows[0]&&rows[0].data)||{};
   return (all.staff||{})[code]||null;
@@ -2815,6 +2850,16 @@ CHANGELOG V84
   - outpatientRoomClosed（v67で outpatientRoomClosedForDisplay に置き換わった旧・診察室開閉判定の残骸）
   - bandSplit（呼び出し箇所ゼロ。WAGE_BANDS 自体は夜外来判定で使用中のため残す）
 - アプリ表示バージョンを V83 から V84 に更新。
+-->
+<!--
+CHANGELOG V85
+- 【古い端末のキャッシュ対策】シフトアプリと同じ「アプリ自動更新」機構を追加。
+  起動時・2分ごと・画面復帰時にサーバー上の最新バージョン(タイトルのV番号)を no-store で確認し、
+  古ければユニークなURLクエリ(_r)を付けて強制再読込する。同じ版への自動再読込は1セッション1回（tc_autoReloadedTo）。
+- クラウド(Supabase)からのデータ取得3箇所（シフト予定・申請・スタッフ設定）に
+  cache:'no-store'＋Cache-Control/Pragmaヘッダを追加し、毎回必ず最新データを取得するようにした。
+  ※URLに &_ts= を付ける方式はPostgRESTが400で拒否するため使わない（シフトアプリv203で実測確認）。
+- アプリ表示バージョンを V84 から V85 に更新。
 -->
 </body>
 </html>
