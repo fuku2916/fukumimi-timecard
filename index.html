@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>クリニック タイムカード V88</title>
+<title>クリニック タイムカード V89</title>
 <style>
   :root{
     --bg:#10402c; --panel:#ffffff; --ink:#1f2a24; --muted:#6b7c72;
@@ -171,7 +171,7 @@
 <header class="app">
   <h1>
     <span class="brandlogo" id="brandLogo" title="iPad打刻画面に戻る"><span class="mark">🏥</span><span class="org">福耳会</span></span>
-    <span class="apptitle">クリニック タイムカード<span class="ver">V88</span></span>
+    <span class="apptitle">クリニック タイムカード<span class="ver">V89</span></span>
   </h1>
   <div class="roles">
     <button data-role="ipad" class="active">iPad打刻</button>
@@ -759,7 +759,7 @@ function hmOf(min){return `${pad2(Math.floor(min/60))}:${pad2(min%60)}`;}
 
 /* ===== シフト管理アプリ(クラウド/JSON)取り込み ===== */
 // ── 【V85】アプリ自動更新（古い端末がキャッシュされた旧版を表示し続けるのを防ぐ。シフトアプリと同方式）──
-const TC_APP_VERSION='V88';
+const TC_APP_VERSION='V89';
 function tcForceReloadLatest(){
   try{
     const sp=new URLSearchParams(location.search);
@@ -999,6 +999,30 @@ function buildCloudPayload(){
   });
   return {staff,updatedAt:new Date().toISOString()};
 }
+/* ===== 【V89】スマホ閲覧の自動反映＝打刻のたびに本人データ(timecard_data)を自動でクラウド保存 =====
+   トグル tc_autopush='1'。打刻後90秒のデバウンスでまとめて1回push（保存済み合言葉 tc_shiftpw を使用）。
+   失敗はログ(tc_autopush_log)に記録し、次の打刻や1時間ごとの判定で再試行（打刻業務は妨げない）。 */
+const AUTOPUSH_KEY='tc_autopush', AUTOPUSH_LOG='tc_autopush_log';
+function autoPushEnabled(){try{return localStorage.getItem(AUTOPUSH_KEY)==='1';}catch(e){return false;}}
+function autoPushLog(){try{return JSON.parse(localStorage.getItem(AUTOPUSH_LOG)||'null');}catch(e){return null;}}
+let AUTOPUSH_TIMER=null, AUTOPUSH_DIRTY=false, AUTOPUSH_BUSY=false;
+function schedulePush(){ // 打刻ハンドラから呼ばれる
+  if(!autoPushEnabled())return;
+  AUTOPUSH_DIRTY=true;
+  clearTimeout(AUTOPUSH_TIMER);
+  AUTOPUSH_TIMER=setTimeout(runAutoPush,90*1000);
+}
+async function runAutoPush(){
+  if(AUTOPUSH_BUSY||!AUTOPUSH_DIRTY||!autoPushEnabled())return;
+  const pw=localStorage.getItem('tc_shiftpw')||'';
+  if(!pw){try{localStorage.setItem(AUTOPUSH_LOG,JSON.stringify({at:new Date().toISOString(),ok:false,msg:'合言葉が未保存'}));}catch(e){}return;}
+  AUTOPUSH_BUSY=true;
+  try{ await pushCloud(pw); AUTOPUSH_DIRTY=false;
+    localStorage.setItem(AUTOPUSH_LOG,JSON.stringify({at:new Date().toISOString(),ok:true,msg:'スマホ閲覧データを自動保存しました'}));
+  }catch(e){ try{localStorage.setItem(AUTOPUSH_LOG,JSON.stringify({at:new Date().toISOString(),ok:false,msg:String(e&&e.message||e)}));}catch(_e){}
+  }finally{AUTOPUSH_BUSY=false;}
+}
+setInterval(()=>{if(AUTOPUSH_DIRTY)runAutoPush();},60*60*1000); // 失敗分の再試行
 async function pushCloud(pw){
   const t=await sbLogin(pw);
   const r=await fetch(SB_URL+'/rest/v1/timecard_data?on_conflict=id',
@@ -1706,9 +1730,9 @@ function openPunch(s){
     <button class="linkbtn" id="btnClose">閉じる</button>`;
   $('#modalBg').classList.add('show');
   $('#btnClose').onclick=closeModal;
-  $('#btnIn').onclick=()=>{s.rec={in:nowHM(),out:null};logPunch(s);saveState();renderIpad();popMarble(s.id,'in');toast(`${s.name} さん 出勤を記録しました（${s.rec.in}）`);
+  $('#btnIn').onclick=()=>{s.rec={in:nowHM(),out:null};logPunch(s);saveState();schedulePush();renderIpad();popMarble(s.id,'in');toast(`${s.name} さん 出勤を記録しました（${s.rec.in}）`);
     const d=punchDeviation(s.id,'in',s.rec.in); if(d!=null&&Math.abs(d)>30)showPunchReason(s,'in',d); else closeModal();};
-  $('#btnOut').onclick=()=>{s.rec.out=nowHM();logPunch(s);saveState();renderIpad();popMarble(s.id,'out');toast(`${s.name} さん 退勤を記録しました（${s.rec.out}）`);
+  $('#btnOut').onclick=()=>{s.rec.out=nowHM();logPunch(s);saveState();schedulePush();renderIpad();popMarble(s.id,'out');toast(`${s.name} さん 退勤を記録しました（${s.rec.out}）`);
     const d=punchDeviation(s.id,'out',s.rec.out); if(d!=null&&Math.abs(d)>30)showPunchReason(s,'out',d); else closeModal();};
 }
 /* ===== 【V87】打刻がシフト予定と±30分超ズレたら、その場で理由を選んでもらう ===== */
@@ -1738,7 +1762,7 @@ function showPunchReason(s,kind,diff){
   const save=(label,text)=>{
     clearTimeout(showPunchReason._t); window.__prPending=null;
     const rec=PUNCHLOG[s.id]&&PUNCHLOG[s.id][today];
-    if(rec){rec[key]={label,text:text||'',diff,at:new Date().toISOString()};saveState();}
+    if(rec){rec[key]={label,text:text||'',diff,at:new Date().toISOString()};saveState();schedulePush();}
     closeModal(); toast('理由を記録しました：'+label+(text?('（'+text.slice(0,20)+(text.length>20?'…':'')+'）'):''));
   };
   window.__prPending=save; // 背景タップで閉じた場合は「未回答」で記録
@@ -2280,7 +2304,10 @@ function renderAdminPane(tab){
       <h2 style="font-size:14px;margin:0 0 6px">本人データのクラウド保存（スマホ閲覧用）</h2>
       <p class="muted" style="margin:0 0 10px">このタブレットの打刻・申請・アイコン・PINをクラウド（timecard_data）へ保存します。保存後、各スタッフは自分のスマホで「勤務状況の確認」をクラウド取得できます。</p>
       <button class="btn" id="cloudPush">⬆ 本人データをクラウドへ保存</button>
-      <div class="note">合言葉は上のシフト取込と同じものを使います。保存先テーブル <code>timecard_data</code> はバックエンドでの作成が必要です（仕様書を別途お渡しします）。</div>`;
+      <button class="btn ${autoPushEnabled()?'':'ghost'}" id="autoPushToggle">${autoPushEnabled()?'🟢 打刻のたびに自動保存 ON（タップでOFF）':'⚪ 打刻のたびに自動保存 OFF（タップでON）'}</button>
+      <div class="note">合言葉は上のシフト取込と同じものを使います。保存先テーブル <code>timecard_data</code> はバックエンドでの作成が必要です（仕様書を別途お渡しします）。<br>
+      <b>自動保存をON</b>にすると、打刻（と理由選択）のたびに約90秒後、保存済みの合言葉で自動的にクラウドへ保存します＝各スタッフのスマホの「勤務状況の確認」がほぼリアルタイムで最新になります。実際に打刻に使うiPadでONにしてください。
+      ${(()=>{const g=autoPushLog();return g?('最終結果: '+new Date(g.at).toLocaleString('ja-JP')+' — '+(g.ok?'✅ ':'⚠ ')+g.msg):'';})()}</div>`;
     $('#cloudPush').onclick=async()=>{
       let pwv=$('#sbPw').value||localStorage.getItem('tc_shiftpw');
       if(!pwv){toast('合言葉を入力してください');return;}
@@ -2294,6 +2321,12 @@ function renderAdminPane(tab){
       const btn=$('#sbImport');btn.textContent='取り込み中…';btn.disabled=true;
       try{const{ym}=await cloudImport(pwv);renderAdmin();toast(`シフト取り込み完了（${ym||'—'}）`);}
       catch(e){toast('取込失敗: '+e.message);btn.textContent='☁ クラウドから取り込み';btn.disabled=false;}
+    };
+    $('#autoPushToggle').onclick=()=>{
+      const on=!autoPushEnabled();
+      try{localStorage.setItem(AUTOPUSH_KEY,on?'1':'0');}catch(e){}
+      renderAdmin();
+      toast(on?'打刻のたびの自動保存をONにしました':'打刻のたびの自動保存をOFFにしました');
     };
     $('#autoSyncToggle').onclick=()=>{
       const on=!autoSyncEnabled();
@@ -2775,7 +2808,13 @@ function renderPunchList(p){
   ${PL_VIEW==='person'?`<div class="row" style="margin-bottom:8px"><label>スタッフ<br><select class="f" id="plStaff" style="min-width:280px">${staffOpts}</select></label></div>`:''}
   <div style="overflow:auto" id="plPane"></div>
   <p class="plnote">丸めルール: 出勤=予定より早い打刻は予定開始時刻に丸め／予定より遅い打刻（遅刻）は丸めず実時刻を採用し「遅」を表示／予定の無い日は15分切り上げ。退勤=丸めなし（実打刻のまま）。<br>
-  退職済みスタッフの打刻もこの画面・CSV・PDFに残り続けます（名簿から消えても打刻データは削除されません）。CSVはスタッフごとにブロックを分けて出力します。</p>`;
+  退職済みスタッフの打刻もこの画面・CSV・PDFに残り続けます（名簿から消えても打刻データは削除されません）。CSVはスタッフごとにブロックを分けて出力します。</p>
+  <div style="margin-top:10px;padding:10px 12px;background:var(--soft);border-radius:10px">
+    <b style="font-size:13px">🗄 月次自動バックアップ</b>
+    <span class="muted" style="font-size:12px">　締め日（毎月11日）を過ぎて最初に管理者画面を開いたとき、前の締め期間（11日〜10日）の打刻一覧CSVを自動でダウンロード保存します（PDFは案内からワンタップ）。バックアップを保管したいパソコンでONにしてください。</span><br>
+    <button class="btn ${autoBackupEnabled()?'':'ghost'}" id="autoBkToggle" style="margin-top:8px">${autoBackupEnabled()?'🟢 自動バックアップ ON（タップでOFF）':'⚪ 自動バックアップ OFF（タップでON）'}</button>
+    <span class="muted" style="font-size:12px;margin-left:8px">${(()=>{const k=localStorage.getItem(AUTOBK_LAST);return k?('最終バックアップ済み期間: 〜'+k+'-10'):'まだ自動バックアップは動いていません。';})()}</span>
+  </div>`;
   const pane=$('#plPane');
   if(PL_VIEW==='all'){ pane.innerHTML=people.length?plMatrixHTML(people,from,to):'<p class="muted">期間内に打刻・予定のあるスタッフがいません。</p>'; }
   else{ const pp=people.find(x=>x.code===PL_STAFF); pane.innerHTML=pp?plPersonTableHTML(pp.code,pp.name,from,to):'<p class="muted">スタッフがいません。</p>'; }
@@ -2788,6 +2827,7 @@ function renderPunchList(p){
   const ss=$('#plStaff'); if(ss)ss.onchange=e=>{PL_STAFF=e.target.value;renderPunchList(p);};
   $('#plCSV').onclick=plExportCSV;
   $('#plPDF').onclick=plExportPDF;
+  const bk=$('#autoBkToggle'); if(bk)bk.onclick=()=>{ const on=!autoBackupEnabled(); try{localStorage.setItem(AUTOBK_KEY,on?'1':'0');}catch(e){} renderPunchList(p); toast(on?'月次自動バックアップをONにしました（締め日明けに自動保存）':'自動バックアップをOFFにしました'); if(on)autoBackupTick(); };
 }
 function plExportCSV(){
   const {from,to}=plPeriod();
@@ -2850,6 +2890,39 @@ function plExportPDF(){
   if(!w){alert('ポップアップがブロックされました。ブラウザの設定でこのサイトのポップアップを許可してください。');return;}
   w.document.write(html);w.document.close();
 }
+/* ===== 【V89】月次自動バックアップ =====
+   締め日(毎月11日)以降に管理者画面を開くと、直前の締め期間(前月11日〜当月10日)の打刻一覧CSVを自動でダウンロード保存。
+   トグル tc_autobackup='1'（管理用PCでONにする想定）。実施済み期間は tc_autobackup_last に記録。PDFはバナーからワンタップ。 */
+const AUTOBK_KEY='tc_autobackup', AUTOBK_LAST='tc_autobackup_last';
+function autoBackupEnabled(){try{return localStorage.getItem(AUTOBK_KEY)==='1';}catch(e){return false;}}
+function prevClosedPeriod(){ // 直近で「締め終わった」期間（今日が11日以降=先月11日〜今月10日／10日以前=先々月11日〜先月10日）
+  const d=new Date(); let y=d.getFullYear(), m=d.getMonth()+1; // 終端月
+  if(d.getDate()<11){ m-=1; if(m<1){m=12;y--;} }
+  let y2=y, m2=m-1; if(m2<1){m2=12;y2--;}
+  return {from:`${y2}-${pad2(m2)}-11`, to:`${y}-${pad2(m)}-10`, key:`${y}-${pad2(m)}`};
+}
+function autoBackupTick(){
+  if(!autoBackupEnabled())return;
+  const p=prevClosedPeriod();
+  if((localStorage.getItem(AUTOBK_LAST)||'')===p.key)return;
+  const save=PL_FROM, save2=PL_TO, save3=PL_CLINIC;
+  try{
+    PL_FROM=p.from; PL_TO=p.to; PL_CLINIC='all';
+    plExportCSV(); // スタッフごとブロックのCSVを自動ダウンロード
+    localStorage.setItem(AUTOBK_LAST,p.key);
+    toast(`🗄 締め期間 ${p.from}〜${p.to} の打刻一覧CSVを自動バックアップしました（ダウンロードに保存）`);
+    // PDFも保存できるようバナーを表示
+    const bar=document.createElement('div');
+    bar.id='autoBkBar';
+    bar.style.cssText='position:fixed;left:50%;transform:translateX(-50%);bottom:18px;z-index:4000;background:#123f25;color:#fff;padding:12px 18px;border-radius:12px;box-shadow:0 6px 24px rgba(0,0,0,.3);display:flex;gap:12px;align-items:center;font-size:13px';
+    bar.innerHTML=`🗄 ${p.from}〜${p.to} のCSVを保存しました。<button id="autoBkPdf" style="padding:6px 14px;border:0;border-radius:8px;background:#22c55e;color:#fff;font-weight:700;cursor:pointer">PDFも保存する</button><button id="autoBkClose" style="padding:6px 10px;border:0;border-radius:8px;background:rgba(255,255,255,.15);color:#fff;cursor:pointer">閉じる</button>`;
+    document.body.appendChild(bar);
+    document.getElementById('autoBkPdf').onclick=()=>{ const a=PL_FROM,b=PL_TO,c=PL_CLINIC; PL_FROM=p.from;PL_TO=p.to;PL_CLINIC='all'; try{plExportPDF();}finally{PL_FROM=a;PL_TO=b;PL_CLINIC=c;} };
+    document.getElementById('autoBkClose').onclick=()=>{ try{bar.remove();}catch(e){} };
+    setTimeout(()=>{try{bar.remove();}catch(e){}},120000);
+  }catch(e){ console.warn('autoBackup失敗',e); }
+  finally{ PL_FROM=save; PL_TO=save2; PL_CLINIC=save3; }
+}
 
 
 /* ============ 共通：切替・初期化 ============ */
@@ -2862,6 +2935,7 @@ function setRole(r){
     if(normalizedPw!==ADMIN_PW){toast('パスワードが違います');return;}
     adminAuthed=true;
   }
+  if(r==='admin')setTimeout(autoBackupTick,1200); // 【V89】締め日を過ぎていたら前期間の打刻一覧を自動バックアップ
   if(r!=='admin')adminAuthed=false;       // 管理者画面を離れたら再ロック
   curRole=r;
   if(r!=='staff')staffAuthed=null; // スタッフ画面を離れたら必ずログアウト
