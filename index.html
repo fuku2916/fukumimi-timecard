@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>クリニック タイムカード V89</title>
+<title>クリニック タイムカード V90</title>
 <style>
   :root{
     --bg:#10402c; --panel:#ffffff; --ink:#1f2a24; --muted:#6b7c72;
@@ -171,7 +171,7 @@
 <header class="app">
   <h1>
     <span class="brandlogo" id="brandLogo" title="iPad打刻画面に戻る"><span class="mark">🏥</span><span class="org">福耳会</span></span>
-    <span class="apptitle">クリニック タイムカード<span class="ver">V89</span></span>
+    <span class="apptitle">クリニック タイムカード<span class="ver">V90</span></span>
   </h1>
   <div class="roles">
     <button data-role="ipad" class="active">iPad打刻</button>
@@ -702,8 +702,9 @@ function includeDateForClinic(s,date,clinicId){
 let IMPORT_STAFF=[];  // シフトアプリから取り込んだ登録者（全職種・拠点で分けない）
 // 打刻画面の名簿：取り込み済みなら登録者全員、未取込なら内蔵名簿（拠点別）
 function displayRoster(){ return (IMPORT_STAFF&&IMPORT_STAFF.length)?IMPORT_STAFF:locStaff(); }
+function isRetiredNow(code){ return inactiveStatusOn(code,today)==='退職'; } // 【V90】在籍ステータス=退職（本日有効）
 function punchList(){
-  return displayRoster().filter(s=>!isHidden(s.id)).map(s=>{
+  return displayRoster().filter(s=>!isHidden(s.id)&&!isRetiredNow(s.id)).map(s=>{
     if(IMPORT_STAFF&&IMPORT_STAFF.length){ s.rec=(PUNCHLOG[s.id]&&PUNCHLOG[s.id][today])||{in:null,out:null}; }
     return s;
   });
@@ -759,7 +760,7 @@ function hmOf(min){return `${pad2(Math.floor(min/60))}:${pad2(min%60)}`;}
 
 /* ===== シフト管理アプリ(クラウド/JSON)取り込み ===== */
 // ── 【V85】アプリ自動更新（古い端末がキャッシュされた旧版を表示し続けるのを防ぐ。シフトアプリと同方式）──
-const TC_APP_VERSION='V89';
+const TC_APP_VERSION='V90';
 function tcForceReloadLatest(){
   try{
     const sp=new URLSearchParams(location.search);
@@ -1101,13 +1102,14 @@ function parseJob(job,jobName,idx,rep){
       const oldMeta=STAFF_META[r.code]||{};
       const pc=normClinicId(st.payrollClinic)||oldMeta.payrollClinic||importClinic;
       const wc=Array.isArray(st.workClinics)?st.workClinics.filter(normClinicId):(oldMeta.workClinics||[importClinic]);
-      STAFF_META[r.code]={...oldMeta,payrollClinic:pc,workClinics:wc.length?wc:[importClinic],sourceClinics:[...new Set([...(oldMeta.sourceClinics||[]),importClinic])]};
+      STAFF_META[r.code]={...oldMeta,payrollClinic:pc,workClinics:wc.length?wc:[importClinic],sourceClinics:[...new Set([...(oldMeta.sourceClinics||[]),importClinic])],...(st.hireDate?{hire:st.hireDate,hireAuto:true}:{})}; // 【V90】入社日はシフトアプリから自動反映
     }
     if(r.code&&st.avatar&&typeof st.avatar==='object')AVATAR_PREF[r.code]=st.avatar; // 本人がスマホで設定したアイコンを反映
     // 打刻画面の名簿に登録（全職種・コードが付いた人。重複はスキップ）
+    if(r.code){ const _ex=IMPORT_STAFF.find(x=>x.id===r.code); if(_ex&&st.hireDate)_ex.hire=st.hireDate; } // 【V90】取込のたびに入社日を最新化
     if(r.code&&!IMPORT_STAFF.some(x=>x.id===r.code)){
       const pc=(STAFF_META[r.code]&&STAFF_META[r.code].payrollClinic)||importClinic;
-      IMPORT_STAFF.push({id:r.code, name:st.fullName||st.name||r.code, pin:st.pin||'', unit:jobName, emp:(st.cond&&st.cond.emp)||'parttime', noJudge:(jobName==='doctor')||!!(st.cond&&st.cond.noLateEarly), loc:pc, payrollClinic:pc, rec:{in:null,out:null}}); // 【v80】noJudge=遅刻・早退を判定しない（医師は自動、他はシフトアプリの職員条件から）
+      IMPORT_STAFF.push({id:r.code, name:st.fullName||st.name||r.code, pin:st.pin||'', unit:jobName, emp:(st.cond&&st.cond.emp)||'parttime', noJudge:(jobName==='doctor')||!!(st.cond&&st.cond.noLateEarly), loc:pc, payrollClinic:pc, hire:st.hireDate||'', rec:{in:null,out:null}}); // 【v80】noJudge=遅刻・早退を判定しない（医師は自動、他はシフトアプリの職員条件から）
     }
     rep.push({job:jobName,name:st.name,code:st.code||'',resolved:r.code,ok:r.ok,reason:r.reason});});
   // 診療カレンダーの担当医師：ドクター職種は給与コードが無くても名前を記録（麻酔科パート等）
@@ -1731,9 +1733,61 @@ function openPunch(s){
   $('#modalBg').classList.add('show');
   $('#btnClose').onclick=closeModal;
   $('#btnIn').onclick=()=>{s.rec={in:nowHM(),out:null};logPunch(s);saveState();schedulePush();renderIpad();popMarble(s.id,'in');toast(`${s.name} さん 出勤を記録しました（${s.rec.in}）`);
+    const anniv=anniversaryYears(s.id); if(anniv)celebrateAnniversary(s,anniv); // 【V90】入社◯周年の日は花火でお祝い
     const d=punchDeviation(s.id,'in',s.rec.in); if(d!=null&&Math.abs(d)>30)showPunchReason(s,'in',d); else closeModal();};
   $('#btnOut').onclick=()=>{s.rec.out=nowHM();logPunch(s);saveState();schedulePush();renderIpad();popMarble(s.id,'out');toast(`${s.name} さん 退勤を記録しました（${s.rec.out}）`);
     const d=punchDeviation(s.id,'out',s.rec.out); if(d!=null&&Math.abs(d)>30)showPunchReason(s,'out',d); else closeModal();};
+}
+/* ===== 【V90】入社◯周年の出勤打刻でお祝い花火 ===== */
+function hireDateOf(code){
+  const m=STAFF_META[String(code)]; if(m&&m.hire)return m.hire;
+  const s=STAFF.find(x=>String(x.id)===String(code)); if(s&&s.hire)return s.hire;
+  const im=(IMPORT_STAFF||[]).find(x=>String(x.id)===String(code)); return (im&&im.hire)||'';
+}
+function anniversaryYears(code){ // 今日が入社ちょうど◯年目の応当日なら◯を返す（それ以外は0）
+  const h=hireDateOf(code); if(!/^\d{4}-\d{2}-\d{2}$/.test(h))return 0;
+  const hy=+h.slice(0,4), md=h.slice(5);
+  const ty=+today.slice(0,4), tmd=today.slice(5);
+  return (md===tmd&&ty>hy)?(ty-hy):0;
+}
+function celebrateAnniversary(s,years){
+  if(!document.getElementById('fwStyle')){
+    const st=document.createElement('style'); st.id='fwStyle';
+    st.textContent=`.fwWrap{position:fixed;inset:0;pointer-events:none;z-index:6000;overflow:hidden}
+      .fwP{position:absolute;width:9px;height:9px;border-radius:50%;animation:fwFly 1.5s ease-out forwards}
+      @keyframes fwFly{0%{transform:translate(0,0) scale(1);opacity:1}70%{opacity:1}100%{transform:translate(var(--dx),var(--dy)) scale(.25);opacity:0}}
+      .fwMsg{position:absolute;left:50%;top:36%;transform:translate(-50%,-50%);font-size:min(6vw,40px);font-weight:900;color:#fff;
+        text-shadow:0 0 18px rgba(255,200,60,.95),0 2px 14px rgba(0,0,0,.55);animation:fwMsg 6.5s ease forwards;text-align:center;white-space:nowrap}
+      @keyframes fwMsg{0%{transform:translate(-50%,-50%) scale(.3);opacity:0}12%{transform:translate(-50%,-50%) scale(1.15);opacity:1}
+        20%{transform:translate(-50%,-50%) scale(1)}85%{opacity:1}100%{transform:translate(-50%,-50%) scale(1.05);opacity:0}}`;
+    document.head.appendChild(st);
+  }
+  const wrap=document.createElement('div'); wrap.className='fwWrap';
+  wrap.innerHTML=`<div class="fwMsg">🎉 ${s.name} さん<br>入社 ${years} 周年 おめでとうございます！ 🎆</div>`;
+  document.body.appendChild(wrap);
+  const HUES=[45,20,330,200,140,275];
+  const burst=(x,y)=>{
+    const hue=HUES[Math.floor(Math.random()*HUES.length)];
+    for(let i=0;i<26;i++){
+      const p=document.createElement('div'); p.className='fwP';
+      const a=Math.PI*2*i/26+Math.random()*0.3, r=70+Math.random()*130;
+      p.style.left=x+'px'; p.style.top=y+'px';
+      p.style.background=`hsl(${hue+Math.random()*30},100%,${60+Math.random()*25}%)`;
+      p.style.boxShadow=`0 0 10px hsl(${hue},100%,70%)`;
+      p.style.setProperty('--dx',Math.cos(a)*r+'px');
+      p.style.setProperty('--dy',(Math.sin(a)*r+40)+'px');
+      wrap.appendChild(p);
+      setTimeout(()=>{try{p.remove();}catch(e){}},1600);
+    }
+  };
+  let n=0;
+  const iv=setInterval(()=>{
+    n++;
+    burst(window.innerWidth*(0.12+Math.random()*0.76), window.innerHeight*(0.10+Math.random()*0.5));
+    if(n>=10){clearInterval(iv);}
+  },420);
+  burst(window.innerWidth*0.5, window.innerHeight*0.30);
+  setTimeout(()=>{try{wrap.remove();}catch(e){}},7000);
 }
 /* ===== 【V87】打刻がシフト予定と±30分超ズレたら、その場で理由を選んでもらう ===== */
 const PUNCH_REASONS_IN=['臨時でシフト予定外の勤務があるため','診療以外の業務があるため'];
@@ -2420,18 +2474,19 @@ function renderAdminPane(tab){
         <h2 style="font-size:14px;margin:0">打刻画面に表示するスタッフ</h2>
         <span class="muted" id="showCount" style="margin-left:auto"></span>
       </div>
-      <p class="muted" style="margin:6px 0 10px">チェックを外した人は、トップページ（iPad打刻画面）に表示されません。退職・休職中の方などを非表示にできます。打刻データや過去の集計は消えません（表示の切り替えのみ）。</p>
+      <p class="muted" style="margin:6px 0 10px">チェックを外した人は、トップページ（iPad打刻画面）に表示されません。休職中の方などを非表示にできます。<b>在籍ステータスが「退職」の方は自動で非表示</b>になり、この一覧にも出ません（シフトアプリの在籍ステータスで退職を登録→取込で反映）。打刻データや過去の集計は消えません（表示の切り替えのみ）。</p>
       <div class="row" style="gap:8px;margin-bottom:10px">
         <button class="btn ghost mini" id="showAllBtn">全員を表示</button>
       </div>
       <div id="showList" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:6px"></div>
     </div>
-    <p class="muted">勤務開始日（入社日）と希望就業時間（月）を登録します。勤務開始日から有給の法定付与日数が計算されます。</p>
+    <p class="muted">勤務開始日（入社日）はシフト管理アプリの「📇 基本情報」の入社日から<b>取込のたびに自動反映</b>されます（<span style="color:#0f766e;font-weight:700">自動</span>印）。シフトアプリに入社日が無い人だけ、ここで手入力してください。希望就業時間（月）はここで登録します。</p>
     <table><thead><tr><th>名前</th><th>勤務開始日</th><th>勤続</th><th>法定付与</th><th>希望就業(月h)</th></tr></thead>
     <tbody>${locStaff().map(s=>{
       const yrs=((new Date(today)-new Date(s.hire))/(1000*60*60*24*365)).toFixed(1);
+      const _auto=STAFF_META[s.id]&&STAFF_META[s.id].hireAuto;
       return `<tr><td>${s.name}</td>
-      <td><input type="date" value="${s.hire}" onchange="setHire('${s.id}',this.value)"></td>
+      <td><input type="date" value="${s.hire}" onchange="setHire('${s.id}',this.value)" ${_auto?'title="シフトアプリから自動反映（取込のたびに上書きされます）"':''}>${_auto?'<span style="color:#0f766e;font-size:11px;font-weight:700;margin-left:4px">自動</span>':''}</td>
       <td>${yrs}年</td>
       <td id="lv-${s.id}"><b>${statutoryLeave(s.hire)}日</b></td>
       <td><input type="number" min="0" style="width:90px" value="${s.desired||''}" onchange="setDesired('${s.id}',this.value)"></td>
@@ -2444,7 +2499,7 @@ function renderAdminPane(tab){
 // スタッフ設定：打刻画面に表示するスタッフのチェックリスト
 function renderShowList(){
   const box=$('#showList'); if(!box)return;
-  const list=displayRoster();
+  const list=displayRoster().filter(s=>!isRetiredNow(s.id)); // 【V90】退職ステータスの人は一覧にも出さない（自動非表示）
   box.innerHTML=list.map(s=>`<label style="display:flex;align-items:center;gap:8px;padding:6px 8px;background:#fff;border:1px solid var(--line);border-radius:8px;font-size:13px${isHidden(s.id)?';opacity:.55':''}">
     <input type="checkbox" ${isHidden(s.id)?'':'checked'} onchange="setHidden('${s.id}',!this.checked)">
     <span>${s.name}</span>${isHidden(s.id)?'<span class="muted" style="margin-left:auto;font-size:11px">非表示</span>':''}</label>`).join('');
