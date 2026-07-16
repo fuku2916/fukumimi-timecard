@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>クリニック タイムカード V92</title>
+<title>クリニック タイムカード V93</title>
 <style>
   :root{
     --bg:#10402c; --panel:#ffffff; --ink:#1f2a24; --muted:#6b7c72;
@@ -171,7 +171,7 @@
 <header class="app">
   <h1>
     <span class="brandlogo" id="brandLogo" title="iPad打刻画面に戻る"><span class="mark">🏥</span><span class="org">福耳会</span></span>
-    <span class="apptitle">クリニック タイムカード<span class="ver">V92</span></span>
+    <span class="apptitle">クリニック タイムカード<span class="ver">V93</span></span>
   </h1>
   <div class="roles">
     <button data-role="ipad" class="active">iPad打刻</button>
@@ -760,7 +760,7 @@ function hmOf(min){return `${pad2(Math.floor(min/60))}:${pad2(min%60)}`;}
 
 /* ===== シフト管理アプリ(クラウド/JSON)取り込み ===== */
 // ── 【V85】アプリ自動更新（古い端末がキャッシュされた旧版を表示し続けるのを防ぐ。シフトアプリと同方式）──
-const TC_APP_VERSION='V92';
+const TC_APP_VERSION='V93';
 function tcForceReloadLatest(){
   try{
     const sp=new URLSearchParams(location.search);
@@ -1106,7 +1106,7 @@ function parseJob(job,jobName,idx,rep){
     }
     if(r.code&&st.avatar&&typeof st.avatar==='object')AVATAR_PREF[r.code]=st.avatar; // 本人がスマホで設定したアイコンを反映
     // 打刻画面の名簿に登録（全職種・コードが付いた人。重複はスキップ）
-    if(r.code){ const _ex=IMPORT_STAFF.find(x=>x.id===r.code); if(_ex&&st.hireDate)_ex.hire=st.hireDate; } // 【V90】取込のたびに入社日を最新化
+    if(r.code){ const _ex=IMPORT_STAFF.find(x=>x.id===r.code); if(_ex){ if(st.hireDate)_ex.hire=st.hireDate; const _nm=st.fullName||st.name; if(_nm)_ex.name=_nm; } } // 【V90】取込のたびに入社日を最新化【V93】氏名（フルネーム）も最新化=ビー玉の表示名がシフトアプリの基本情報に追従
     if(r.code&&!IMPORT_STAFF.some(x=>x.id===r.code)){
       const pc=(STAFF_META[r.code]&&STAFF_META[r.code].payrollClinic)||importClinic;
       IMPORT_STAFF.push({id:r.code, name:st.fullName||st.name||r.code, pin:st.pin||'', unit:jobName, emp:(st.cond&&st.cond.emp)||'parttime', noJudge:(jobName==='doctor')||!!(st.cond&&st.cond.noLateEarly), loc:pc, payrollClinic:pc, hire:st.hireDate||'', rec:{in:null,out:null}}); // 【v80】noJudge=遅刻・早退を判定しない（医師は自動、他はシフトアプリの職員条件から）
