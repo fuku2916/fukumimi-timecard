@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>クリニック タイムカード V86</title>
+<title>クリニック タイムカード V87</title>
 <style>
   :root{
     --bg:#10402c; --panel:#ffffff; --ink:#1f2a24; --muted:#6b7c72;
@@ -171,7 +171,7 @@
 <header class="app">
   <h1>
     <span class="brandlogo" id="brandLogo" title="iPad打刻画面に戻る"><span class="mark">🏥</span><span class="org">福耳会</span></span>
-    <span class="apptitle">クリニック タイムカード<span class="ver">V86</span></span>
+    <span class="apptitle">クリニック タイムカード<span class="ver">V87</span></span>
   </h1>
   <div class="roles">
     <button data-role="ipad" class="active">iPad打刻</button>
@@ -736,7 +736,7 @@ function calcDaily(s){
 /* ===== 打刻ログ（日別）と 1か月集計 → CSV ===== */
 // PUNCHLOG[staffId][YYYY-MM-DD] = {in,out}
 let PUNCHLOG={};
-function logPunch(s){PUNCHLOG[s.id]=PUNCHLOG[s.id]||{};PUNCHLOG[s.id][today]={in:s.rec.in,out:s.rec.out,real:true};} // 【v74修正】real=実打刻の印（デモ再生成で消さない）
+function logPunch(s){PUNCHLOG[s.id]=PUNCHLOG[s.id]||{};PUNCHLOG[s.id][today]={...(PUNCHLOG[s.id][today]||{}),in:s.rec.in,out:s.rec.out,real:true};} // 【v74修正】real=実打刻の印（デモ再生成で消さない）【V87】マージ方式=理由(inReason/outReason)等を温存
 function refreshTodayPunchRecords(){
   // 画面表示用の s.rec は、必ず本日の PUNCHLOG から作り直す。
   // 初期デモデータに入っている rec:{in:'08:58',out:null} 等を勤務中判定に使わない。
@@ -759,7 +759,7 @@ function hmOf(min){return `${pad2(Math.floor(min/60))}:${pad2(min%60)}`;}
 
 /* ===== シフト管理アプリ(クラウド/JSON)取り込み ===== */
 // ── 【V85】アプリ自動更新（古い端末がキャッシュされた旧版を表示し続けるのを防ぐ。シフトアプリと同方式）──
-const TC_APP_VERSION='V86';
+const TC_APP_VERSION='V87';
 function tcForceReloadLatest(){
   try{
     const sp=new URLSearchParams(location.search);
@@ -1676,11 +1676,50 @@ function openPunch(s){
     <button class="linkbtn" id="btnClose">閉じる</button>`;
   $('#modalBg').classList.add('show');
   $('#btnClose').onclick=closeModal;
-  $('#btnIn').onclick=()=>{s.rec={in:nowHM(),out:null};logPunch(s);saveState();closeModal();renderIpad();popMarble(s.id,'in');toast(`${s.name} さん 出勤を記録しました（${s.rec.in}）`);};
-  $('#btnOut').onclick=()=>{s.rec.out=nowHM();logPunch(s);saveState();closeModal();renderIpad();popMarble(s.id,'out');toast(`${s.name} さん 退勤を記録しました（${s.rec.out}）`);};
+  $('#btnIn').onclick=()=>{s.rec={in:nowHM(),out:null};logPunch(s);saveState();renderIpad();popMarble(s.id,'in');toast(`${s.name} さん 出勤を記録しました（${s.rec.in}）`);
+    const d=punchDeviation(s.id,'in',s.rec.in); if(d!=null&&Math.abs(d)>30)showPunchReason(s,'in',d); else closeModal();};
+  $('#btnOut').onclick=()=>{s.rec.out=nowHM();logPunch(s);saveState();renderIpad();popMarble(s.id,'out');toast(`${s.name} さん 退勤を記録しました（${s.rec.out}）`);
+    const d=punchDeviation(s.id,'out',s.rec.out); if(d!=null&&Math.abs(d)>30)showPunchReason(s,'out',d); else closeModal();};
+}
+/* ===== 【V87】打刻がシフト予定と±30分超ズレたら、その場で理由を選んでもらう ===== */
+const PUNCH_REASONS_IN=['臨時でシフト予定外の勤務があるため','診療以外の業務があるため'];
+const PUNCH_REASONS_OUT=['診療が延長したから','会議など診療以外の業務があったため','臨時でシフト予定外の勤務があるため'];
+function punchDeviation(code,kind,hm){ // 予定との差（分）。予定が無い日は null（理由は聞かない）
+  const sh=SHIFTPLAN[code]&&SHIFTPLAN[code][today]; if(!sh)return null;
+  const base=(kind==='in')?sh.start:sh.end; if(!base)return null;
+  const a=toMin(hm),b=toMin(base); if(a==null||b==null)return null;
+  return a-b;
+}
+function showPunchReason(s,kind,diff){
+  const box=$('#modalBox'); box.style.maxWidth='440px';
+  const list=(kind==='in')?PUNCH_REASONS_IN:PUNCH_REASONS_OUT;
+  const dir=diff>0?'遅い':'早い', mins=Math.abs(diff);
+  const key=(kind==='in')?'inReason':'outReason';
+  box.innerHTML=`
+    <h3 style="margin-bottom:2px">${kind==='in'?'🟢 出勤':'🟠 退勤'}の理由を教えてください</h3>
+    <div class="muted" style="margin-bottom:10px">${s.name} さん：シフト予定より <b style="color:#b45309">${mins}分${dir}</b> ${kind==='in'?'出勤':'退勤'}です（打刻は記録済み）</div>
+    ${list.map((t,i)=>`<button class="bigbtn" data-pr="${i}" style="background:#0f766e;font-size:16px;padding:14px;margin-top:8px">${i+1}）${t}</button>`).join('')}
+    <button class="bigbtn" id="prOther" style="background:#64748b;font-size:16px;padding:14px;margin-top:8px">${list.length+1}）その他（理由を入力）</button>
+    <div id="prOtherBox" style="display:none;margin-top:10px;text-align:left">
+      <textarea id="prText" rows="3" style="width:100%;box-sizing:border-box;font-size:16px;padding:10px;border:1px solid #cbd5e1;border-radius:10px" placeholder="理由を入力してください（キーボードのマイク🎤で音声入力もできます）"></textarea>
+      <button class="bigbtn" id="prSave" style="background:#0f766e;font-size:16px;padding:12px;margin-top:8px">この理由で記録する</button>
+    </div>`;
+  $('#modalBg').classList.add('show');
+  const save=(label,text)=>{
+    clearTimeout(showPunchReason._t); window.__prPending=null;
+    const rec=PUNCHLOG[s.id]&&PUNCHLOG[s.id][today];
+    if(rec){rec[key]={label,text:text||'',diff,at:new Date().toISOString()};saveState();}
+    closeModal(); toast('理由を記録しました：'+label+(text?('（'+text.slice(0,20)+(text.length>20?'…':'')+'）'):''));
+  };
+  window.__prPending=save; // 背景タップで閉じた場合は「未回答」で記録
+  box.querySelectorAll('button[data-pr]').forEach(b=>{b.onclick=()=>save(list[+b.dataset.pr],'');});
+  $('#prOther').onclick=()=>{$('#prOtherBox').style.display='';$('#prText').focus();};
+  $('#prSave').onclick=()=>{const t=($('#prText').value||'').trim(); if(!t){toast('理由を入力してください');return;} save('その他',t);};
+  clearTimeout(showPunchReason._t);
+  showPunchReason._t=setTimeout(()=>{ if(window.__prPending)window.__prPending('未回答（時間切れ）',''); },90000); // 共有iPadで放置されても次の人が使えるように
 }
 function closeModal(){$('#modalBg').classList.remove('show');}
-$('#modalBg').onclick=e=>{if(e.target.id==='modalBg')closeModal();};
+$('#modalBg').onclick=e=>{if(e.target.id==='modalBg'){if(window.__prPending){window.__prPending('未回答','');}else closeModal();}};
 
 /* ============ 描画：スタッフ ============ */
 function fillStaffSelect(){
@@ -2605,9 +2644,11 @@ function plDailyRows(code,from,to){
     if(!punched){status=leave==='paid'?'有給':leave==='paid_pm'?'半有':leave==='off'?'休み':isClosedDay(d)?'休診':sh?(inactiveStatusOn(code,d)||'欠勤'):'';}
     let net=0;
     if(punched){const g=toMin(ro.rout)-toMin(ro.rin);if(g>0)net=g-autoBreak(g);}
+    const fmtR=x=>x?(x.label+(x.text?'：'+x.text:'')):''; // 【V87】打刻理由
     rows.push({d,md:`${pad2(dt.getMonth()+1)}/${pad2(dt.getDate())}`,w:PL_W[dow],dow,status,
       shs:sh?sh.start:'',she:sh?sh.end:'',pin:(r&&r.in)||'',pout:(r&&r.out)||'',
-      rin:punched||((r&&r.in))?ro.rin:'',rout:ro.rout,late:ro.late,net,punched});
+      rin:punched||((r&&r.in))?ro.rin:'',rout:ro.rout,late:ro.late,net,punched,
+      inR:fmtR(r&&r.inReason),outR:fmtR(r&&r.outReason)});
   }
   return rows;
 }
@@ -2617,7 +2658,9 @@ function plCellHTML(code,d,dow){
   const cls=dow===0?' class="plsun"':dow===6?' class="plsat"':'';
   if(!(r&&(r.in||r.out)))return `<td${cls}>-</td>`;
   const ro=plRound(code,d,r);
-  return `<td${cls}><span class="plraw">${r.in||'—'}-${r.out||'—'}</span><br><span class="plrnd">${ro.rin||'—'}-${ro.rout||'—'}${ro.late?'<span class="pllate">遅</span>':''}</span></td>`;
+  const _fr=x=>x?(x.label+(x.text?'：'+x.text:'')):'';
+  const rsn=[r.inReason?('出) '+_fr(r.inReason)):'',r.outReason?('退) '+_fr(r.outReason)):''].filter(Boolean).join(' ／ ');
+  return `<td${cls}${rsn?` title="${rsn.replace(/"/g,'&quot;')}"`:''}><span class="plraw">${r.in||'—'}-${r.out||'—'}</span><br><span class="plrnd">${ro.rin||'—'}-${ro.rout||'—'}${ro.late?'<span class="pllate">遅</span>':''}${rsn?'<span class="pllate">※</span>':''}</span></td>`;
 }
 function plMatrixHTML(people,from,to){
   const days=[];for(let dt=parseDateLocal(from);dateYMD(dt)<=to;dt=addDays(dt,1))days.push(new Date(dt));
@@ -2627,16 +2670,17 @@ function plMatrixHTML(people,from,to){
   return `<table class="pltbl plmatrix"><thead>
     <tr><th class="plname" rowspan="2">${from.replace(/-/g,'/')}〜<br>${to.replace(/-/g,'/')}</th>${th1}</tr>
     <tr>${th2}</tr></thead><tbody>${body}</tbody></table>
-    <div class="plnote">各セル 上段=実打刻／下段=丸め後（<span class="pllate">遅</span>=遅刻: 予定開始より遅い打刻のため丸めず実時刻を採用）</div>`;
+    <div class="plnote">各セル 上段=実打刻／下段=丸め後（<span class="pllate">遅</span>=遅刻: 予定開始より遅い打刻のため丸めず実時刻を採用／<span class="pllate">※</span>=打刻理由あり: マウスを乗せると表示・詳細は個人別/CSV）</div>`;
 }
 function plPersonTableHTML(code,name,from,to){
   const rows=plDailyRows(code,from,to);
   const tr=rows.map(r=>`<tr${r.dow===0?' class="plsunrow"':''}>
     <td>${r.md}(${r.w})</td><td>${r.status}</td><td>${r.shs&&r.she?`${r.shs}-${r.she}`:''}</td>
     <td>${r.pin}</td><td>${r.pout}</td><td>${r.rin}${r.late?'<span class="pllate">遅</span>':''}</td><td>${r.rout}</td>
-    <td style="text-align:right">${r.punched?mmt(r.net):''}</td></tr>`).join('');
+    <td style="text-align:right">${r.punched?mmt(r.net):''}</td>
+    <td style="text-align:left;white-space:normal;max-width:260px">${[r.inR?('出) '+r.inR):'',r.outR?('退) '+r.outR):''].filter(Boolean).join('<br>')}</td></tr>`).join('');
   return `<table class="pltbl plperson"><thead><tr>
-    <th>日付</th><th>状態</th><th>シフト予定</th><th>実出勤</th><th>実退勤</th><th>丸め出勤</th><th>丸め退勤</th><th>実働(丸め)</th>
+    <th>日付</th><th>状態</th><th>シフト予定</th><th>実出勤</th><th>実退勤</th><th>丸め出勤</th><th>丸め退勤</th><th>実働(丸め)</th><th>打刻理由（±30分超）</th>
     </tr></thead><tbody>${tr}</tbody></table>`;
 }
 function renderPunchList(p){
@@ -2705,8 +2749,8 @@ function plExportCSV(){
   people.forEach(pp=>{
     L.push([]);
     L.push(['スタッフコード',pp.code,'氏名',pp.name]);
-    L.push(['日付','曜日','状態','予定開始','予定終了','実出勤','実退勤','丸め出勤','丸め退勤','遅刻','実働(丸め)']);
-    plDailyRows(pp.code,from,to).forEach(r=>L.push([r.d,r.w,r.status,r.shs,r.she,r.pin,r.pout,r.rin,r.rout,r.late?'遅刻':'',r.punched?mmt(r.net):'']));
+    L.push(['日付','曜日','状態','予定開始','予定終了','実出勤','実退勤','丸め出勤','丸め退勤','遅刻','実働(丸め)','出勤理由','退勤理由']);
+    plDailyRows(pp.code,from,to).forEach(r=>L.push([r.d,r.w,r.status,r.shs,r.she,r.pin,r.pout,r.rin,r.rout,r.late?'遅刻':'',r.punched?mmt(r.net):'',r.inR||'',r.outR||'']));
   });
   const csv='﻿'+L.map(row=>row.map(csvCell).join(',')).join('\r\n')+'\r\n';
   const blob=new Blob([csv],{type:'text/csv;charset=utf-8'});const url=URL.createObjectURL(blob);
