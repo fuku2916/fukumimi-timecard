@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>クリニック タイムカード V87</title>
+<title>クリニック タイムカード V88</title>
 <style>
   :root{
     --bg:#10402c; --panel:#ffffff; --ink:#1f2a24; --muted:#6b7c72;
@@ -171,7 +171,7 @@
 <header class="app">
   <h1>
     <span class="brandlogo" id="brandLogo" title="iPad打刻画面に戻る"><span class="mark">🏥</span><span class="org">福耳会</span></span>
-    <span class="apptitle">クリニック タイムカード<span class="ver">V87</span></span>
+    <span class="apptitle">クリニック タイムカード<span class="ver">V88</span></span>
   </h1>
   <div class="roles">
     <button data-role="ipad" class="active">iPad打刻</button>
@@ -759,7 +759,7 @@ function hmOf(min){return `${pad2(Math.floor(min/60))}:${pad2(min%60)}`;}
 
 /* ===== シフト管理アプリ(クラウド/JSON)取り込み ===== */
 // ── 【V85】アプリ自動更新（古い端末がキャッシュされた旧版を表示し続けるのを防ぐ。シフトアプリと同方式）──
-const TC_APP_VERSION='V87';
+const TC_APP_VERSION='V88';
 function tcForceReloadLatest(){
   try{
     const sp=new URLSearchParams(location.search);
@@ -898,6 +898,36 @@ async function cloudImport(pw){
   try{ await fetchRequestsData(t); applyAvatarsFromReq(); saveAvatarPref(); saveState(); }catch(e){ console.warn('requests_data skip',e.message); }
   return res;
 }
+/* ===== 【V88】シフトの自動取り込み（iPad常時起動前提・毎日1回） =====
+   手動取込を忘れても、保存済みの合言葉(tc_shiftpw)で毎日5時以降の最初のタイミングに自動でクラウド取込。
+   成功した日はその日はもう走らない。失敗時は1時間ごとに再試行。結果は tc_autosync_log に記録し取込タブに表示。 */
+const AUTOSYNC_KEY='tc_autosync', AUTOSYNC_LAST='tc_autosync_last', AUTOSYNC_LOG='tc_autosync_log';
+function autoSyncEnabled(){try{return localStorage.getItem(AUTOSYNC_KEY)==='1';}catch(e){return false;}}
+function autoSyncLog(){try{return JSON.parse(localStorage.getItem(AUTOSYNC_LOG)||'null');}catch(e){return null;}}
+let AUTOSYNC_BUSY=false;
+async function autoSyncTick(force){
+  if(AUTOSYNC_BUSY)return;
+  if(!force){
+    if(!autoSyncEnabled())return;
+    if(new Date().getHours()<5)return;                                   // 深夜は走らせない
+    if((localStorage.getItem(AUTOSYNC_LAST)||'')===today)return;         // 今日はもう成功済み
+  }
+  const pw=localStorage.getItem('tc_shiftpw')||'';
+  if(!pw){try{localStorage.setItem(AUTOSYNC_LOG,JSON.stringify({at:new Date().toISOString(),ok:false,msg:'合言葉が未保存（一度手動で取り込んでください）'}));}catch(e){}return;}
+  AUTOSYNC_BUSY=true;
+  try{
+    const {ym}=await cloudImport(pw);
+    localStorage.setItem(AUTOSYNC_LAST,today);
+    localStorage.setItem(AUTOSYNC_LOG,JSON.stringify({at:new Date().toISOString(),ok:true,msg:'取込成功（'+(ym||'—')+'）'}));
+    if(curRole==='admin')renderAdmin();
+    toast('🔄 シフト予定を自動取り込みしました（'+(ym||'—')+'）');
+  }catch(e){
+    try{localStorage.setItem(AUTOSYNC_LOG,JSON.stringify({at:new Date().toISOString(),ok:false,msg:String(e&&e.message||e)}));}catch(_e){}
+  }finally{AUTOSYNC_BUSY=false;}
+}
+setInterval(()=>{autoSyncTick(false);},60*60*1000);                        // 1時間ごとに判定（失敗日はこれが再試行になる）
+window.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')autoSyncTick(false);});
+setTimeout(()=>{autoSyncTick(false);},15000);                              // 起動15秒後にも判定
 /* ===== requests_data（アイコン avatars / 打刻修正 timecardCorrections） =====
    data[unit] = { requests:{}, avatars:{code:{color,shape,icon}}, timecardCorrections:[...] } */
 async function fetchRequestsData(token){
@@ -2237,6 +2267,16 @@ function renderAdminPane(tab){
       <div class="note">クラウド取込が動かない場合は、同じブラウザで開いたシフトアプリの端末データ、またはシフトアプリの「全データ保存」JSONを読み込めます。${IMPORT_INFO?'':'まだ取り込んでいません。'}</div>
 
       <hr style="border:0;border-top:1px solid var(--line);margin:18px 0">
+      <h2 style="font-size:14px;margin:0 0 6px">🔄 シフトの自動取り込み（取り込み忘れ防止）</h2>
+      <p class="muted" style="margin:0 0 8px">ONにすると、このタブレットが<b>毎日 朝5時以降の最初のタイミング</b>で、保存済みの合言葉を使ってシフト予定を自動で取り込みます（失敗した日は1時間ごとに再試行）。月初も月の途中のシフト変更も自動で反映されます。</p>
+      <div class="row" style="align-items:center;gap:10px">
+        <button class="btn ${autoSyncEnabled()?'':'ghost'}" id="autoSyncToggle">${autoSyncEnabled()?'🟢 自動取り込み ON（タップでOFF）':'⚪ 自動取り込み OFF（タップでON）'}</button>
+        <button class="btn ghost" id="autoSyncNow">今すぐ実行して動作確認</button>
+      </div>
+      <div class="note" id="autoSyncStatus">${(()=>{const g=autoSyncLog();return g?('最終結果: '+new Date(g.at).toLocaleString('ja-JP')+' — '+(g.ok?'✅ ':'⚠ ')+g.msg):'まだ自動取り込みは動いていません。';})()}
+      ${localStorage.getItem('tc_shiftpw')?'（合言葉は保存済み）':'<b style="color:#b45309">（合言葉が未保存です。上の欄に入力して一度「クラウドから取り込み」を実行すると保存されます）</b>'}</div>
+
+      <hr style="border:0;border-top:1px solid var(--line);margin:18px 0">
       <h2 style="font-size:14px;margin:0 0 6px">本人データのクラウド保存（スマホ閲覧用）</h2>
       <p class="muted" style="margin:0 0 10px">このタブレットの打刻・申請・アイコン・PINをクラウド（timecard_data）へ保存します。保存後、各スタッフは自分のスマホで「勤務状況の確認」をクラウド取得できます。</p>
       <button class="btn" id="cloudPush">⬆ 本人データをクラウドへ保存</button>
@@ -2254,6 +2294,19 @@ function renderAdminPane(tab){
       const btn=$('#sbImport');btn.textContent='取り込み中…';btn.disabled=true;
       try{const{ym}=await cloudImport(pwv);renderAdmin();toast(`シフト取り込み完了（${ym||'—'}）`);}
       catch(e){toast('取込失敗: '+e.message);btn.textContent='☁ クラウドから取り込み';btn.disabled=false;}
+    };
+    $('#autoSyncToggle').onclick=()=>{
+      const on=!autoSyncEnabled();
+      try{localStorage.setItem(AUTOSYNC_KEY,on?'1':'0');}catch(e){}
+      renderAdmin();
+      toast(on?'自動取り込みをONにしました（毎日 朝5時以降に実行）':'自動取り込みをOFFにしました');
+    };
+    $('#autoSyncNow').onclick=async()=>{
+      const btn=$('#autoSyncNow');btn.textContent='実行中…';btn.disabled=true;
+      await autoSyncTick(true);
+      renderAdmin();
+      const g=autoSyncLog();
+      toast(g&&g.ok?'自動取り込みテスト成功':'自動取り込みテスト失敗: '+(g?g.msg:'不明'));
     };
     $('#localShiftImport').onclick=()=>{
       try{const{ym}=localShiftAppImport();renderAdmin();toast(`シフトアプリ端末データを取り込みました（${ym||'—'}）`);}
