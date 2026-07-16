@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>クリニック タイムカード V90</title>
+<title>クリニック タイムカード V91</title>
 <style>
   :root{
     --bg:#10402c; --panel:#ffffff; --ink:#1f2a24; --muted:#6b7c72;
@@ -171,7 +171,7 @@
 <header class="app">
   <h1>
     <span class="brandlogo" id="brandLogo" title="iPad打刻画面に戻る"><span class="mark">🏥</span><span class="org">福耳会</span></span>
-    <span class="apptitle">クリニック タイムカード<span class="ver">V90</span></span>
+    <span class="apptitle">クリニック タイムカード<span class="ver">V91</span></span>
   </h1>
   <div class="roles">
     <button data-role="ipad" class="active">iPad打刻</button>
@@ -760,7 +760,7 @@ function hmOf(min){return `${pad2(Math.floor(min/60))}:${pad2(min%60)}`;}
 
 /* ===== シフト管理アプリ(クラウド/JSON)取り込み ===== */
 // ── 【V85】アプリ自動更新（古い端末がキャッシュされた旧版を表示し続けるのを防ぐ。シフトアプリと同方式）──
-const TC_APP_VERSION='V90';
+const TC_APP_VERSION='V91';
 function tcForceReloadLatest(){
   try{
     const sp=new URLSearchParams(location.search);
@@ -1763,7 +1763,7 @@ function celebrateAnniversary(s,years){
     document.head.appendChild(st);
   }
   const wrap=document.createElement('div'); wrap.className='fwWrap';
-  wrap.innerHTML=`<div class="fwMsg">🎉 ${s.name} さん<br>入社 ${years} 周年 おめでとうございます！ 🎆</div>`;
+  wrap.innerHTML=`<div class="fwMsg">${s.name} さん、今日で入社 ${years} 周年！<br>いつも本当にありがとうございます 🎉</div>`; // 【V91】院長からの感謝メッセージ（ユーザー選定文言）
   document.body.appendChild(wrap);
   const HUES=[45,20,330,200,140,275];
   const burst=(x,y)=>{
