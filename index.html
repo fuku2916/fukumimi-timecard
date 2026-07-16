@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>クリニック タイムカード V85</title>
+<title>クリニック タイムカード V86</title>
 <style>
   :root{
     --bg:#10402c; --panel:#ffffff; --ink:#1f2a24; --muted:#6b7c72;
@@ -171,7 +171,7 @@
 <header class="app">
   <h1>
     <span class="brandlogo" id="brandLogo" title="iPad打刻画面に戻る"><span class="mark">🏥</span><span class="org">福耳会</span></span>
-    <span class="apptitle">クリニック タイムカード<span class="ver">V85</span></span>
+    <span class="apptitle">クリニック タイムカード<span class="ver">V86</span></span>
   </h1>
   <div class="roles">
     <button data-role="ipad" class="active">iPad打刻</button>
@@ -264,6 +264,7 @@
         <button data-t="median">診察終了 中央値</button>
         <button data-t="point">ポイント判定</button>
         <button data-t="csv">税理士提出データ / CSV</button>
+        <button data-t="punchlist">打刻一覧</button>
         <button data-t="shift">シフト入力</button>
         <button data-t="import">シフトアプリからデータ取り込み</button>
         <button data-t="hours">診察時間の設定</button>
@@ -758,7 +759,7 @@ function hmOf(min){return `${pad2(Math.floor(min/60))}:${pad2(min%60)}`;}
 
 /* ===== シフト管理アプリ(クラウド/JSON)取り込み ===== */
 // ── 【V85】アプリ自動更新（古い端末がキャッシュされた旧版を表示し続けるのを防ぐ。シフトアプリと同方式）──
-const TC_APP_VERSION='V85';
+const TC_APP_VERSION='V86';
 function tcForceReloadLatest(){
   try{
     const sp=new URLSearchParams(location.search);
@@ -2167,6 +2168,8 @@ function renderAdminPane(tab){
     const _xb=$('#xlsxMonthBtn'); if(_xb)_xb.onclick=exportMonthlyXLSX;
     const _px=$('#personXlsxBtn'); if(_px)_px.onclick=exportPersonalXLSX;
     const _pb=$('#punchImpBtn'); if(_pb)_pb.onclick=pickPunchCSV;
+  }else if(tab==='punchlist'){
+    renderPunchList(p);
   }else if(tab==='shift'){
     p.innerHTML=`<p class="muted">本日の予定シフトを編集できます（デモ）。</p>
     <table><thead><tr><th>名前</th><th>診療枠</th><th>開始</th><th>終了</th></tr></thead>
@@ -2561,6 +2564,196 @@ function importPunchCSV(text){
   }catch(err){alert('取り込みに失敗しました：'+(err&&err.message||err));}
 }
 function pickPunchCSV(){const inp=document.createElement('input');inp.type='file';inp.accept='.csv,text/csv';inp.onchange=e=>{const fl=e.target.files&&e.target.files[0];if(!fl)return;const rd=new FileReader();rd.onload=()=>importPunchCSV(String(rd.result));rd.readAsText(fl,'utf-8');};inp.click();}
+
+/* ===== 【V86】打刻一覧（実打刻＋丸め・全体/個人別・CSV/PDF） ===== */
+// 丸めルール（2026-07-15 院長確定）:
+//   出勤: 予定より早い打刻→予定開始時刻に丸め ／ 予定より遅い打刻(遅刻)→丸めず実時刻＋遅刻記録 ／ 予定の無い日→15分切り上げ
+//   退勤: 丸めない（実打刻のまま）
+// 退職などで名簿から消えたコードの打刻も表示し続ける（PUNCHLOG が正本。データは消さない）。
+let PL_VIEW='all', PL_FROM='', PL_TO='', PL_CLINIC='all', PL_STAFF='';
+const PL_W=['日','月','火','水','木','金','土'];
+function plRound(code,d,r){
+  const sh=SHIFTPLAN[code]&&SHIFTPLAN[code][d];
+  const o={rin:(r&&r.in)||'', rout:(r&&r.out)||'', late:false};
+  if(r&&r.in){
+    const pi=toMin(r.in), ss=(sh&&sh.start)?toMin(sh.start):null;
+    if(ss!=null){ if(pi<=ss){o.rin=sh.start;} else {o.rin=r.in;o.late=true;} }
+    else o.rin=mmt(Math.ceil(pi/15)*15);
+  }
+  return o;
+}
+function plPeriod(){ if(!PL_FROM||!PL_TO){const S=payPeriodDefault();PL_FROM=S.from;PL_TO=S.to;} return {from:PL_FROM,to:PL_TO}; }
+function plHasPunch(code,from,to){const log=PUNCHLOG[code]||{};return Object.keys(log).some(d=>d>=from&&d<=to&&log[d]&&(log[d].in||log[d].out));}
+function plHasPlan(code,from,to){const pl=SHIFTPLAN[code]||{};return Object.keys(pl).some(d=>d>=from&&d<=to);}
+function plPeople(clinicId,from,to){
+  const seen=new Set(), people=[];
+  tcSearchPeople().forEach(s=>{const k=String(s.id);if(seen.has(k))return;seen.add(k);people.push({code:k,name:s.name,clinic:staffPayrollClinic(s),known:true});});
+  Object.keys(PUNCHLOG).sort().forEach(c=>{if(!seen.has(c)){seen.add(c);people.push({code:c,name:CODE_NAME[c]||'（名簿外・退職者等）',clinic:'',known:false});}});
+  return people
+    .filter(p=>clinicId==='all'||!p.known||!p.clinic||p.clinic===clinicId)   // 名簿外は勤務地判定不可のため常に対象（データ温存）
+    .filter(p=>plHasPunch(p.code,from,to)||plHasPlan(p.code,from,to));       // 期間内に打刻か予定がある人だけ行にする
+}
+function plDailyRows(code,from,to){
+  const log=PUNCHLOG[code]||{}, plan=SHIFTPLAN[code]||{}, lv=LEAVEPLAN[code]||{};
+  const rows=[];
+  for(let dt=parseDateLocal(from);dateYMD(dt)<=to;dt=addDays(dt,1)){
+    const d=dateYMD(dt), dow=dt.getDay();
+    const r=log[d]||null, sh=plan[d]||null, leave=(lv&&lv[d])||'';
+    const punched=!!(r&&r.in&&r.out);
+    const ro=plRound(code,d,r);
+    let status='';
+    if(!punched){status=leave==='paid'?'有給':leave==='paid_pm'?'半有':leave==='off'?'休み':isClosedDay(d)?'休診':sh?(inactiveStatusOn(code,d)||'欠勤'):'';}
+    let net=0;
+    if(punched){const g=toMin(ro.rout)-toMin(ro.rin);if(g>0)net=g-autoBreak(g);}
+    rows.push({d,md:`${pad2(dt.getMonth()+1)}/${pad2(dt.getDate())}`,w:PL_W[dow],dow,status,
+      shs:sh?sh.start:'',she:sh?sh.end:'',pin:(r&&r.in)||'',pout:(r&&r.out)||'',
+      rin:punched||((r&&r.in))?ro.rin:'',rout:ro.rout,late:ro.late,net,punched});
+  }
+  return rows;
+}
+function plClinicTitle(){return PL_CLINIC==='all'?'医療法人 福耳会（全クリニック）':csvClinicNameById(PL_CLINIC);}
+function plCellHTML(code,d,dow){
+  const r=(PUNCHLOG[code]||{})[d];
+  const cls=dow===0?' class="plsun"':dow===6?' class="plsat"':'';
+  if(!(r&&(r.in||r.out)))return `<td${cls}>-</td>`;
+  const ro=plRound(code,d,r);
+  return `<td${cls}><span class="plraw">${r.in||'—'}-${r.out||'—'}</span><br><span class="plrnd">${ro.rin||'—'}-${ro.rout||'—'}${ro.late?'<span class="pllate">遅</span>':''}</span></td>`;
+}
+function plMatrixHTML(people,from,to){
+  const days=[];for(let dt=parseDateLocal(from);dateYMD(dt)<=to;dt=addDays(dt,1))days.push(new Date(dt));
+  const th1=days.map(dt=>`<th${dt.getDay()===0?' class="plsun"':dt.getDay()===6?' class="plsat"':''}>${dt.getDate()}</th>`).join('');
+  const th2=days.map(dt=>`<th${dt.getDay()===0?' class="plsun"':dt.getDay()===6?' class="plsat"':''}>${PL_W[dt.getDay()]}</th>`).join('');
+  const body=people.map(pp=>`<tr><th class="plname">${pp.name}<br><span class="plcode">${pp.code}</span></th>${days.map(dt=>plCellHTML(pp.code,dateYMD(dt),dt.getDay())).join('')}</tr>`).join('');
+  return `<table class="pltbl plmatrix"><thead>
+    <tr><th class="plname" rowspan="2">${from.replace(/-/g,'/')}〜<br>${to.replace(/-/g,'/')}</th>${th1}</tr>
+    <tr>${th2}</tr></thead><tbody>${body}</tbody></table>
+    <div class="plnote">各セル 上段=実打刻／下段=丸め後（<span class="pllate">遅</span>=遅刻: 予定開始より遅い打刻のため丸めず実時刻を採用）</div>`;
+}
+function plPersonTableHTML(code,name,from,to){
+  const rows=plDailyRows(code,from,to);
+  const tr=rows.map(r=>`<tr${r.dow===0?' class="plsunrow"':''}>
+    <td>${r.md}(${r.w})</td><td>${r.status}</td><td>${r.shs&&r.she?`${r.shs}-${r.she}`:''}</td>
+    <td>${r.pin}</td><td>${r.pout}</td><td>${r.rin}${r.late?'<span class="pllate">遅</span>':''}</td><td>${r.rout}</td>
+    <td style="text-align:right">${r.punched?mmt(r.net):''}</td></tr>`).join('');
+  return `<table class="pltbl plperson"><thead><tr>
+    <th>日付</th><th>状態</th><th>シフト予定</th><th>実出勤</th><th>実退勤</th><th>丸め出勤</th><th>丸め退勤</th><th>実働(丸め)</th>
+    </tr></thead><tbody>${tr}</tbody></table>`;
+}
+function renderPunchList(p){
+  const {from,to}=plPeriod();
+  const people=plPeople(PL_CLINIC,from,to);
+  if(!PL_STAFF||!people.some(x=>x.code===PL_STAFF))PL_STAFF=people.length?people[0].code:'';
+  const clinicOpts=CSV_CLINIC_OPTIONS.map(o=>`<option value="${o.id}" ${o.id===PL_CLINIC?'selected':''}>${o.label}</option>`).join('');
+  const staffOpts=people.map(s=>`<option value="${s.code}" ${s.code===PL_STAFF?'selected':''}>${s.code}　${s.name}${s.known?'':'（名簿外）'}</option>`).join('');
+  p.innerHTML=`
+  <style>
+    .pltbl{border-collapse:collapse;font-size:11px;background:#fff}
+    .pltbl th,.pltbl td{border:1px solid #cbd5e1;padding:2px 4px;text-align:center;white-space:nowrap}
+    .pltbl thead th{background:#eef2ee}
+    .plmatrix{font-size:10px}
+    .plmatrix .plname{position:sticky;left:0;background:#eef2ee;text-align:left;min-width:86px;z-index:1}
+    .plcode{color:#64748b;font-weight:400;font-size:9px}
+    .plraw{color:#64748b}
+    .plrnd{font-weight:700}
+    .pllate{color:#dc2626;font-weight:700;margin-left:2px}
+    th.plsun,td.plsun{background:#fdeef4}
+    th.plsat{color:#2563eb}
+    tr.plsunrow td{background:#fdf2f7}
+    .plnote{color:#64748b;font-size:11px;margin-top:6px}
+    .plperson{min-width:640px}
+  </style>
+  <div class="row" style="align-items:flex-end;gap:12px;flex-wrap:wrap;margin-bottom:8px">
+    <label>勤務地<br><select class="f" id="plClinic">${clinicOpts}</select></label>
+    <label>開始日<br><input class="f" type="date" id="plFrom" value="${from}"></label>
+    <label>終了日<br><input class="f" type="date" id="plTo" value="${to}"></label>
+    <button class="btn" id="plReset">締め期間に戻す</button>
+    <span style="flex:1"></span>
+    <div class="roles" style="background:#eef2ee">
+      <button id="plVAll" class="${PL_VIEW==='all'?'active':''}" style="${PL_VIEW==='all'?'background:#fff;color:#123f25;font-weight:700':''};border:0;padding:8px 14px;border-radius:8px;cursor:pointer">全体表示</button>
+      <button id="plVOne" class="${PL_VIEW==='person'?'active':''}" style="${PL_VIEW==='person'?'background:#fff;color:#123f25;font-weight:700':''};border:0;padding:8px 14px;border-radius:8px;cursor:pointer">個人別</button>
+    </div>
+    <button class="btn primary" id="plCSV">📄 CSVダウンロード</button>
+    <button class="btn primary" id="plPDF">🖨 PDF（印刷・PDF保存）</button>
+  </div>
+  ${PL_VIEW==='person'?`<div class="row" style="margin-bottom:8px"><label>スタッフ<br><select class="f" id="plStaff" style="min-width:280px">${staffOpts}</select></label></div>`:''}
+  <div style="overflow:auto" id="plPane"></div>
+  <p class="plnote">丸めルール: 出勤=予定より早い打刻は予定開始時刻に丸め／予定より遅い打刻（遅刻）は丸めず実時刻を採用し「遅」を表示／予定の無い日は15分切り上げ。退勤=丸めなし（実打刻のまま）。<br>
+  退職済みスタッフの打刻もこの画面・CSV・PDFに残り続けます（名簿から消えても打刻データは削除されません）。CSVはスタッフごとにブロックを分けて出力します。</p>`;
+  const pane=$('#plPane');
+  if(PL_VIEW==='all'){ pane.innerHTML=people.length?plMatrixHTML(people,from,to):'<p class="muted">期間内に打刻・予定のあるスタッフがいません。</p>'; }
+  else{ const pp=people.find(x=>x.code===PL_STAFF); pane.innerHTML=pp?plPersonTableHTML(pp.code,pp.name,from,to):'<p class="muted">スタッフがいません。</p>'; }
+  $('#plClinic').onchange=e=>{PL_CLINIC=e.target.value;renderPunchList(p);};
+  $('#plFrom').onchange=e=>{if(e.target.value){PL_FROM=e.target.value;renderPunchList(p);}};
+  $('#plTo').onchange=e=>{if(e.target.value){PL_TO=e.target.value;renderPunchList(p);}};
+  $('#plReset').onclick=()=>{const S=payPeriodDefault();PL_FROM=S.from;PL_TO=S.to;renderPunchList(p);};
+  $('#plVAll').onclick=()=>{PL_VIEW='all';renderPunchList(p);};
+  $('#plVOne').onclick=()=>{PL_VIEW='person';renderPunchList(p);};
+  const ss=$('#plStaff'); if(ss)ss.onchange=e=>{PL_STAFF=e.target.value;renderPunchList(p);};
+  $('#plCSV').onclick=plExportCSV;
+  $('#plPDF').onclick=plExportPDF;
+}
+function plExportCSV(){
+  const {from,to}=plPeriod();
+  const people=plPeople(PL_CLINIC,from,to);
+  if(!people.length){alert('期間内に打刻・予定のあるスタッフがいません。');return;}
+  const L=[];
+  L.push(['打刻一覧（実打刻と丸め後の両方を記録）']);
+  L.push(['期間',from,to]);
+  L.push(['勤務地',csvClinicLabelById(PL_CLINIC)]);
+  L.push(['出力日時',new Date().toLocaleString('ja-JP')]);
+  L.push(['丸めルール','出勤: 予定より早い打刻は予定開始時刻に丸め／予定より遅い打刻(遅刻)は丸めず実時刻／予定の無い日は15分切り上げ。退勤: 丸めなし']);
+  people.forEach(pp=>{
+    L.push([]);
+    L.push(['スタッフコード',pp.code,'氏名',pp.name]);
+    L.push(['日付','曜日','状態','予定開始','予定終了','実出勤','実退勤','丸め出勤','丸め退勤','遅刻','実働(丸め)']);
+    plDailyRows(pp.code,from,to).forEach(r=>L.push([r.d,r.w,r.status,r.shs,r.she,r.pin,r.pout,r.rin,r.rout,r.late?'遅刻':'',r.punched?mmt(r.net):'']));
+  });
+  const csv='﻿'+L.map(row=>row.map(csvCell).join(',')).join('\r\n')+'\r\n';
+  const blob=new Blob([csv],{type:'text/csv;charset=utf-8'});const url=URL.createObjectURL(blob);
+  const a=document.createElement('a');a.href=url;a.download=`打刻一覧_${from}_${to}_${csvClinicFileById(PL_CLINIC)}.csv`;a.click();URL.revokeObjectURL(url);
+  toast(`打刻一覧CSV（${people.length}名・スタッフごとにブロック区切り）を書き出しました`);
+}
+function plExportPDF(){
+  const {from,to}=plPeriod();
+  const people=plPeople(PL_CLINIC,from,to);
+  if(!people.length){alert('期間内に打刻・予定のあるスタッフがいません。');return;}
+  const pages=people.map(pp=>`<div class="plpage">
+    <h2>${pp.name}（${pp.code}）</h2>
+    <div class="plsub">${plClinicTitle()}　${from.replace(/-/g,'/')}〜${to.replace(/-/g,'/')}　打刻一覧（実打刻と丸め後）</div>
+    ${plPersonTableHTML(pp.code,pp.name,from,to)}</div>`).join('');
+  const html=`<!DOCTYPE html><html lang="ja"><head><meta charset="utf-8"><title>打刻一覧 ${from}〜${to}</title>
+  <style>
+    body{font-family:"Hiragino Sans","Yu Gothic",sans-serif;margin:16px;color:#111}
+    h1{font-size:15px;margin:0 0 8px} h2{font-size:14px;margin:0 0 4px}
+    .plsub{color:#475569;font-size:11px;margin-bottom:6px}
+    .pltbl{border-collapse:collapse;font-size:10px}
+    .pltbl th,.pltbl td{border:1px solid #94a3b8;padding:1px 3px;text-align:center;white-space:nowrap}
+    .pltbl thead th{background:#eee}
+    .plmatrix{font-size:8px}
+    .plmatrix .plname{text-align:left;min-width:70px}
+    .plcode{color:#555;font-weight:400;font-size:7px}
+    .plraw{color:#555} .plrnd{font-weight:700}
+    .pllate{color:#dc2626;font-weight:700}
+    th.plsun,td.plsun{background:#fbe4ee} th.plsat{color:#2563eb}
+    tr.plsunrow td{background:#fdf2f7}
+    .plnote{color:#555;font-size:9px;margin-top:4px}
+    .plpage{page-break-before:always}
+    .plbar{margin-bottom:12px}
+    .plbar button{font-size:15px;padding:8px 16px;cursor:pointer}
+    @page{size:A4 landscape;margin:8mm}
+    @media print{.plbar{display:none}}
+  </style></head><body>
+  <div class="plbar"><button onclick="window.print()">🖨 印刷する（PDFで保存する場合は送信先で「PDFに保存」を選択）</button></div>
+  <h1>${plClinicTitle()}　打刻一覧　${from.replace(/-/g,'/')}〜${to.replace(/-/g,'/')}</h1>
+  <div class="plsub">1ページ目=全体表示（上段=実打刻／下段=丸め後）、2ページ目以降=スタッフ別（1名1ページ）。出力: ${new Date().toLocaleString('ja-JP')}</div>
+  ${plMatrixHTML(people,from,to)}
+  ${pages}
+  </body></html>`;
+  const w=window.open('','_blank');
+  if(!w){alert('ポップアップがブロックされました。ブラウザの設定でこのサイトのポップアップを許可してください。');return;}
+  w.document.write(html);w.document.close();
+}
+
 
 /* ============ 共通：切替・初期化 ============ */
 function setRole(r){
