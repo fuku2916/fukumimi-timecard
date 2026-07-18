@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>クリニック タイムカード V96</title>
+<title>クリニック タイムカード V97</title>
 <style>
   :root{
     --bg:#10402c; --panel:#ffffff; --ink:#1f2a24; --muted:#6b7c72;
@@ -783,7 +783,7 @@ function hmOf(min){return `${pad2(Math.floor(min/60))}:${pad2(min%60)}`;}
 
 /* ===== シフト管理アプリ(クラウド/JSON)取り込み ===== */
 // ── 【V85】アプリ自動更新（古い端末がキャッシュされた旧版を表示し続けるのを防ぐ。シフトアプリと同方式）──
-const TC_APP_VERSION='V96'; // V96: 打刻理由ウィンドウ表示時、ビー玉→風船（出勤）/風船→ビー玉（退勤）の変身アニメと記念日花火を、ウィンドウが閉じた後に再生（ユーザー要望「せっかくのアニメーションが楽しめない」）
+const TC_APP_VERSION='V97'; // V97: 打刻データのクラウド共有＝管理者の打刻一覧が、iPadが自動保存した打刻(timecard_data)をクラウドから取得して表示（人事がどのPCからでもリアルタイムに勤務状況を確認できる・開くと自動取得＋1分ごと自動更新＋手動ボタン）。打刻一覧の初期期間も「今日を含む締め期間」に修正（従来は最終取込月基準で当日の打刻が範囲外になることがあった）。 // V96: 打刻理由ウィンドウ表示時、ビー玉→風船（出勤）/風船→ビー玉（退勤）の変身アニメと記念日花火を、ウィンドウが閉じた後に再生（ユーザー要望「せっかくのアニメーションが楽しめない」）
 function tcForceReloadLatest(){
   try{
     const sp=new URLSearchParams(location.search);
@@ -1071,6 +1071,63 @@ function applyCloudStaff(code,rec){
   if(rec.avatar){AVATAR_PREF[code]=rec.avatar;saveAvatarPref();}
   if(Array.isArray(rec.requests)){REQUESTS=REQUESTS.filter(r=>r.staff!=code).concat(rec.requests);}
 }
+/* ===== 【V97】管理者画面のクラウド打刻取得＝人事がどのPCからでも勤務状況を確認できる =====
+   iPadのV89自動保存が timecard_data に上げた打刻を取得し、この端末のPUNCHLOGへ日付単位でマージする。
+   ローカルにしか無い過去データ（CSV投入分など）は温存。クラウドと重複する日はクラウド（iPadの実打刻）を優先。 */
+let PL_CLOUD_AT=0, PL_CLOUD_MSG='', PL_CLOUD_BUSY=false, PL_LAST_P=null;
+async function pullCloudAll(pw){
+  const t=await sbLogin(pw);
+  const r=await fetch(SB_URL+'/rest/v1/timecard_data?id=eq.main&select=data',
+    {cache:'no-store',headers:{apikey:SB_ANON,Authorization:'Bearer '+t,'Cache-Control':'no-cache',Pragma:'no-cache'}});
+  if(!r.ok)throw new Error('取得失敗（'+r.status+'）');
+  const rows=await r.json(); return (rows[0]&&rows[0].data)||null;
+}
+function mergeCloudPunches(all){ // 反映した打刻件数を返す
+  if(!all||!all.staff)return {changed:0};
+  let changed=0;
+  Object.entries(all.staff).forEach(([code,rec])=>{
+    if(rec&&rec.name&&!CODE_NAME[code])CODE_NAME[code]=rec.name; // 名簿外コードでも名前を表示できるように
+    const punch=rec&&rec.punch; if(!punch)return;
+    PUNCHLOG[code]=PUNCHLOG[code]||{};
+    Object.entries(punch).forEach(([d,pr])=>{
+      if(!pr||typeof pr!=='object')return;
+      const cur=PUNCHLOG[code][d];
+      const merged={...(cur||{}),...pr};
+      if(JSON.stringify(cur||null)!==JSON.stringify(merged)){PUNCHLOG[code][d]=merged;changed++;}
+    });
+  });
+  if(changed)saveState();
+  return {changed};
+}
+function fmtCloudTs(iso){ try{const d=new Date(iso); if(isNaN(d))return''; return `${d.getMonth()+1}/${d.getDate()} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;}catch(e){return'';} }
+async function plCloudPull(manual){
+  if(PL_CLOUD_BUSY)return 0;
+  const pw=localStorage.getItem('tc_shiftpw')||'';
+  if(!pw){ PL_CLOUD_MSG='⚠ 合言葉が未保存です。「シフトアプリからデータ取り込み」を一度実行すると保存され、以後は自動で取得します。'; if(manual)toast('先に取込タブで合言葉を保存してください'); return 0; }
+  PL_CLOUD_BUSY=true;
+  try{
+    const all=await pullCloudAll(pw);
+    const res=mergeCloudPunches(all);
+    PL_CLOUD_AT=Date.now();
+    const now=new Date(), hm=`${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;
+    PL_CLOUD_MSG=`☁ クラウド取得 ${hm}`
+      +(all&&all.updatedAt?`（iPad側の最終保存 ${fmtCloudTs(all.updatedAt)}）`:'（クラウドにまだ打刻データがありません）')
+      +(res.changed?`／打刻 ${res.changed} 件を反映しました`:'／新しい打刻はありません');
+    if(manual)toast(res.changed?`クラウドから打刻 ${res.changed} 件を取り込みました`:'クラウドを確認しました（新しい打刻はありません）');
+    return res.changed;
+  }catch(e){
+    PL_CLOUD_MSG='⚠ クラウド取得に失敗: '+String(e&&e.message||e);
+    if(manual)toast('クラウド取得に失敗しました。通信環境と合言葉をご確認ください');
+    return 0;
+  }finally{PL_CLOUD_BUSY=false;}
+}
+setInterval(()=>{ // 打刻一覧を開いている間は1分ごとに自動更新（人事のリアルタイム確認用）
+  if(!document.getElementById('plPane'))return;
+  plCloudPull(false).then(ch=>{
+    const el=document.getElementById('plCloudInfo'); if(el)el.textContent=PL_CLOUD_MSG;
+    if(ch&&PL_LAST_P&&document.getElementById('plPane'))renderPunchList(PL_LAST_P);
+  });
+},60*1000);
 // 給与名簿との突合インデックス
 function rosterIndex(){
   const byCode={},byFull={},bySur={};
@@ -2810,7 +2867,13 @@ function plRound(code,d,r){
   }
   return o;
 }
-function plPeriod(){ if(!PL_FROM||!PL_TO){const S=payPeriodDefault();PL_FROM=S.from;PL_TO=S.to;} return {from:PL_FROM,to:PL_TO}; }
+function currentPayPeriod(){ // 【V97】今日を含む締め期間（11日〜翌月10日）。従来のpayPeriodDefault(最終取込月基準)だと当日打刻が範囲外になることがあった
+  const ty=+today.slice(0,4), tm=+today.slice(5,7), td=+today.slice(8,10);
+  let y=ty,m=tm; if(td<=10){m--; if(m<1){m=12;y--;}}
+  let y2=y,m2=m+1; if(m2>12){m2=1;y2++;}
+  return {from:`${y}-${pad2(m)}-11`,to:`${y2}-${pad2(m2)}-10`};
+}
+function plPeriod(){ if(!PL_FROM||!PL_TO){const S=currentPayPeriod();PL_FROM=S.from;PL_TO=S.to;} return {from:PL_FROM,to:PL_TO}; }
 function plHasPunch(code,from,to){const log=PUNCHLOG[code]||{};return Object.keys(log).some(d=>d>=from&&d<=to&&log[d]&&(log[d].in||log[d].out));}
 function plHasPlan(code,from,to){const pl=SHIFTPLAN[code]||{};return Object.keys(pl).some(d=>d>=from&&d<=to);}
 function plPeople(clinicId,from,to){
@@ -2908,6 +2971,10 @@ function renderPunchList(p){
     <button class="btn primary" id="plCSV">📄 CSVダウンロード</button>
     <button class="btn primary" id="plPDF">🖨 PDF（印刷・PDF保存）</button>
   </div>
+  <div class="row" style="align-items:center;gap:8px;margin-bottom:8px;flex-wrap:wrap">
+    <button class="btn" id="plCloudPullBtn">☁ 最新の打刻を取得</button>
+    <span class="plnote" id="plCloudInfo" style="margin:0">${PL_CLOUD_MSG||'iPadが自動保存した打刻をクラウドから取得します。打刻一覧を開いている間は1分ごとに自動更新されます。'}</span>
+  </div>
   ${PL_VIEW==='person'?`<div class="row" style="margin-bottom:8px"><label>スタッフ<br><select class="f" id="plStaff" style="min-width:280px">${staffOpts}</select></label></div>`:''}
   <div style="overflow:auto" id="plPane"></div>
   <p class="plnote">丸めルール: 出勤=予定より早い打刻は予定開始時刻に丸め／予定より遅い打刻（遅刻）は丸めず実時刻を採用し「遅」を表示／予定の無い日は15分切り上げ。退勤=丸めなし（実打刻のまま）。<br>
@@ -2924,13 +2991,19 @@ function renderPunchList(p){
   $('#plClinic').onchange=e=>{PL_CLINIC=e.target.value;renderPunchList(p);};
   $('#plFrom').onchange=e=>{if(e.target.value){PL_FROM=e.target.value;renderPunchList(p);}};
   $('#plTo').onchange=e=>{if(e.target.value){PL_TO=e.target.value;renderPunchList(p);}};
-  $('#plReset').onclick=()=>{const S=payPeriodDefault();PL_FROM=S.from;PL_TO=S.to;renderPunchList(p);};
+  $('#plReset').onclick=()=>{const S=currentPayPeriod();PL_FROM=S.from;PL_TO=S.to;renderPunchList(p);};
   $('#plVAll').onclick=()=>{PL_VIEW='all';renderPunchList(p);};
   $('#plVOne').onclick=()=>{PL_VIEW='person';renderPunchList(p);};
   const ss=$('#plStaff'); if(ss)ss.onchange=e=>{PL_STAFF=e.target.value;renderPunchList(p);};
   $('#plCSV').onclick=plExportCSV;
   $('#plPDF').onclick=plExportPDF;
   const bk=$('#autoBkToggle'); if(bk)bk.onclick=()=>{ const on=!autoBackupEnabled(); try{localStorage.setItem(AUTOBK_KEY,on?'1':'0');}catch(e){} renderPunchList(p); toast(on?'月次自動バックアップをONにしました（締め日明けに自動保存）':'自動バックアップをOFFにしました'); if(on)autoBackupTick(); };
+  // 【V97】クラウド打刻の取得（手動ボタン＋開いたとき60秒以上経っていれば自動）
+  PL_LAST_P=p;
+  const cp=$('#plCloudPullBtn'); if(cp)cp.onclick=async()=>{ cp.disabled=true; cp.textContent='☁ 取得中…'; await plCloudPull(true); renderPunchList(p); };
+  if(Date.now()-PL_CLOUD_AT>60*1000&&localStorage.getItem('tc_shiftpw')){
+    plCloudPull(false).then(ch=>{ const el=$('#plCloudInfo'); if(el)el.textContent=PL_CLOUD_MSG; if(ch&&$('#plPane'))renderPunchList(p); });
+  }else{ const el=$('#plCloudInfo'); if(PL_CLOUD_MSG&&el)el.textContent=PL_CLOUD_MSG; }
 }
 function plExportCSV(){
   const {from,to}=plPeriod();
