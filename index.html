@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>クリニック タイムカード V109</title>
+<title>クリニック タイムカード V110</title>
 <style>
   :root{
     --bg:#10402c; --panel:#ffffff; --ink:#1f2a24; --muted:#6b7c72;
@@ -785,7 +785,7 @@ function hmOf(min){return `${pad2(Math.floor(min/60))}:${pad2(min%60)}`;}
 
 /* ===== シフト管理アプリ(クラウド/JSON)取り込み ===== */
 // ── 【V85】アプリ自動更新（古い端末がキャッシュされた旧版を表示し続けるのを防ぐ。シフトアプリと同方式）──
-const TC_APP_VERSION='V109'; // V109: 表示スタッフ設定のクラウド中央管理（ユーザー方針「iPadはただの入力装置・設定やデータはクラウドで人事が管理」）。「打刻画面に表示するスタッフ」(HIDDEN)を settings_main行で全端末共有＝人事のPCで変更→各院のiPadへ自動反映（新しい更新が勝ち）。全端末が10分ごとにクラウドを自動取得（打刻・訂正・設定・退職ステータスの伝播が最大10分に短縮。従来はiPadは起動時のみ）。 // V108: V107の訂正伝播の仕上げ2点。(1)改訂履歴を適用した端末は自分のクラウド行も更新(schedulePush)＝所有端末の行に訂正が確実に反映される。(2)訂正適用済みの記録(aed印)は、古いクラウド行の値で巻き戻さないガードをマージに追加（訂正→行更新までの時間差で古い値が一瞬復活して見える問題の防止）。 // V107: 改ざん検知の二本柱（ユーザー要望・電子カルテ方式）。(1)打刻改訂履歴: 打刻の全ての修正（管理者修正・申告承認・原本へ戻す）をクラウドの追記型ログ(audit_log行)へ記録＝変更前後・日時・端末が消せない形で残る。ログは全端末が取得・適用するため、どの管理端末から修正しても全端末に伝播（所有権extの壁を越える正規の訂正経路）。(2)日次確定記録: 前日までの実打刻（原本優先）を日ごとにハッシュ化し、前日のハッシュを織り込んだ鎖(audit_seal行)として毎日確定＝過去のどこかを直接書き換えると検証で機械的に検知。「🔗記録の検証」「📜変更履歴」ボタンを打刻一覧に追加。 // V106: 打刻一覧マトリクスの凡例（上段=実打刻/下段=丸め後）を表の下→表の一番上に移動（ユーザー要望・下にあると気づかない）。 // V105: 傾きの「校正」機能を追加（ユーザー報告: V104でも縦向きでビー玉が左右へ偏る＝この個体は画面回転角がOSから正しく取れていない可能性）。動き調整に📐校正ボタン=いつもの置き方でまっすぐ立てて押すと、その向きを「真下」として記憶（端末ごと・localStorage tc_tilt_calib）。以後は記憶した向きからのズレだけに反応。センサー診断表示（β/γ/回転角/傾き出力のライブ表示）も追加＝実機の生値で原因を特定できる。 // V104: 傾き検出を重力ベクトル復元方式に刷新（ユーザー報告: ホームボタン上の縦持ち・垂直立てでビー玉が左右へ偏る）。V103の角度合成(γcos+βsin)は端末がほぼ垂直のとき角度表現の特異点(ジンバルロック)で誤動作した。V104はβγから重力ベクトルの画面右成分 sinγ·cosβ·cos(ang)+sinβ·sin(ang) を計算＝どの持ち方・立て方でも「画面の右が下がったら右」。 // V103: iPad横向きでビー玉/風船の傾き反応が逆になる問題を修正（ユーザー報告）。原因=ev.gammaを画面回転の補正なしで使用→縦横で軸が入れ替わる。画面の回転角(screen.orientation.angle)でbeta/gammaを合成し「画面の右が下がったら右」に統一。保険として動き調整に「傾きの向きを反転」スイッチも追加。 // V102: 画面左上のバージョン表示が手書きのままV95で止まっていた問題を修正（ユーザー報告）。起動時にTC_APP_VERSIONから自動表示＝今後ズレない。 // V101: Service Worker(sw.js)導入＝リロード・起動のたびに必ずネットワークから最新HTMLを取得（ブラウザキャッシュに頼らない）。通信不能時のみ最後に成功した版で起動（オフライン耐性）。既存の2分ごと自動更新チェック(V100)は保険として継続。 // V100: 自動更新の再試行対応（ユーザー報告「リロードしてもV95のまま」）。従来は1タブにつき1回しか自動リロードを試みず、初回が古いキャッシュを掴むとそのタブは古いまま固まった→5分おきに再試行する方式に変更。 // V99: 正式データをクラウドへ（ユーザー要望「iPadはただの入力装置に。iPadは落下・故障の実績あり」）。(1)クラウド保存を『置き換え』→『読み出し→合成→書き込み』に＝クラウドに打刻が蓄積され、iPad初期化・故障でもクラウドの過去打刻は消えない。(2)起動時にクラウドから自動復元（自院行の欠け日付をローカルへ・合言葉保存済み端末のみ）＝新しいiPadに替えても合言葉だけで復帰。(3)月次自動バックアップ時に締め期間の確定スナップショットをクラウド(snap_YYYY-MM行)にも保存＝過去の版がクラウドに残る。 // V98: 打刻クラウドを全クリニック・全職種対応に。保存先を勤務地ごとの行(punch_ekimae等)に分離＝複数iPadの相互上書き事故を防止。閲覧側(打刻一覧/スマホ勤務状況)は全院の行をまとめて取得。この端末で作った打刻はこの端末が正(ext印の無い打刻はクラウドで上書きしない・pushはext印なしのみ)。勤務地選択をlocalStorage(tc_loc)に永続化。 // V97: 打刻データのクラウド共有＝管理者の打刻一覧が、iPadが自動保存した打刻(timecard_data)をクラウドから取得して表示（人事がどのPCからでもリアルタイムに勤務状況を確認できる・開くと自動取得＋1分ごと自動更新＋手動ボタン）。打刻一覧の初期期間も「今日を含む締め期間」に修正（従来は最終取込月基準で当日の打刻が範囲外になることがあった）。 // V96: 打刻理由ウィンドウ表示時、ビー玉→風船（出勤）/風船→ビー玉（退勤）の変身アニメと記念日花火を、ウィンドウが閉じた後に再生（ユーザー要望「せっかくのアニメーションが楽しめない」）
+const TC_APP_VERSION='V110'; // V110: 月次自動バックアップの保存先フォルダ指定（ユーザー要望「CSVを自動でクラウド同期フォルダへ」）。打刻一覧の自動バックアップ欄に「📁 保存先フォルダを選ぶ」＝一度OneDrive/Googleドライブ等の同期フォルダを選べば、以後の自動バックアップCSVはダウンロードフォルダを経由せず直接そこへ書き込み（File System Access API・フォルダの権限が切れている時は従来のダウンロードにフォールバック）。 // V109: 表示スタッフ設定のクラウド中央管理（ユーザー方針「iPadはただの入力装置・設定やデータはクラウドで人事が管理」）。「打刻画面に表示するスタッフ」(HIDDEN)を settings_main行で全端末共有＝人事のPCで変更→各院のiPadへ自動反映（新しい更新が勝ち）。全端末が10分ごとにクラウドを自動取得（打刻・訂正・設定・退職ステータスの伝播が最大10分に短縮。従来はiPadは起動時のみ）。 // V108: V107の訂正伝播の仕上げ2点。(1)改訂履歴を適用した端末は自分のクラウド行も更新(schedulePush)＝所有端末の行に訂正が確実に反映される。(2)訂正適用済みの記録(aed印)は、古いクラウド行の値で巻き戻さないガードをマージに追加（訂正→行更新までの時間差で古い値が一瞬復活して見える問題の防止）。 // V107: 改ざん検知の二本柱（ユーザー要望・電子カルテ方式）。(1)打刻改訂履歴: 打刻の全ての修正（管理者修正・申告承認・原本へ戻す）をクラウドの追記型ログ(audit_log行)へ記録＝変更前後・日時・端末が消せない形で残る。ログは全端末が取得・適用するため、どの管理端末から修正しても全端末に伝播（所有権extの壁を越える正規の訂正経路）。(2)日次確定記録: 前日までの実打刻（原本優先）を日ごとにハッシュ化し、前日のハッシュを織り込んだ鎖(audit_seal行)として毎日確定＝過去のどこかを直接書き換えると検証で機械的に検知。「🔗記録の検証」「📜変更履歴」ボタンを打刻一覧に追加。 // V106: 打刻一覧マトリクスの凡例（上段=実打刻/下段=丸め後）を表の下→表の一番上に移動（ユーザー要望・下にあると気づかない）。 // V105: 傾きの「校正」機能を追加（ユーザー報告: V104でも縦向きでビー玉が左右へ偏る＝この個体は画面回転角がOSから正しく取れていない可能性）。動き調整に📐校正ボタン=いつもの置き方でまっすぐ立てて押すと、その向きを「真下」として記憶（端末ごと・localStorage tc_tilt_calib）。以後は記憶した向きからのズレだけに反応。センサー診断表示（β/γ/回転角/傾き出力のライブ表示）も追加＝実機の生値で原因を特定できる。 // V104: 傾き検出を重力ベクトル復元方式に刷新（ユーザー報告: ホームボタン上の縦持ち・垂直立てでビー玉が左右へ偏る）。V103の角度合成(γcos+βsin)は端末がほぼ垂直のとき角度表現の特異点(ジンバルロック)で誤動作した。V104はβγから重力ベクトルの画面右成分 sinγ·cosβ·cos(ang)+sinβ·sin(ang) を計算＝どの持ち方・立て方でも「画面の右が下がったら右」。 // V103: iPad横向きでビー玉/風船の傾き反応が逆になる問題を修正（ユーザー報告）。原因=ev.gammaを画面回転の補正なしで使用→縦横で軸が入れ替わる。画面の回転角(screen.orientation.angle)でbeta/gammaを合成し「画面の右が下がったら右」に統一。保険として動き調整に「傾きの向きを反転」スイッチも追加。 // V102: 画面左上のバージョン表示が手書きのままV95で止まっていた問題を修正（ユーザー報告）。起動時にTC_APP_VERSIONから自動表示＝今後ズレない。 // V101: Service Worker(sw.js)導入＝リロード・起動のたびに必ずネットワークから最新HTMLを取得（ブラウザキャッシュに頼らない）。通信不能時のみ最後に成功した版で起動（オフライン耐性）。既存の2分ごと自動更新チェック(V100)は保険として継続。 // V100: 自動更新の再試行対応（ユーザー報告「リロードしてもV95のまま」）。従来は1タブにつき1回しか自動リロードを試みず、初回が古いキャッシュを掴むとそのタブは古いまま固まった→5分おきに再試行する方式に変更。 // V99: 正式データをクラウドへ（ユーザー要望「iPadはただの入力装置に。iPadは落下・故障の実績あり」）。(1)クラウド保存を『置き換え』→『読み出し→合成→書き込み』に＝クラウドに打刻が蓄積され、iPad初期化・故障でもクラウドの過去打刻は消えない。(2)起動時にクラウドから自動復元（自院行の欠け日付をローカルへ・合言葉保存済み端末のみ）＝新しいiPadに替えても合言葉だけで復帰。(3)月次自動バックアップ時に締め期間の確定スナップショットをクラウド(snap_YYYY-MM行)にも保存＝過去の版がクラウドに残る。 // V98: 打刻クラウドを全クリニック・全職種対応に。保存先を勤務地ごとの行(punch_ekimae等)に分離＝複数iPadの相互上書き事故を防止。閲覧側(打刻一覧/スマホ勤務状況)は全院の行をまとめて取得。この端末で作った打刻はこの端末が正(ext印の無い打刻はクラウドで上書きしない・pushはext印なしのみ)。勤務地選択をlocalStorage(tc_loc)に永続化。 // V97: 打刻データのクラウド共有＝管理者の打刻一覧が、iPadが自動保存した打刻(timecard_data)をクラウドから取得して表示（人事がどのPCからでもリアルタイムに勤務状況を確認できる・開くと自動取得＋1分ごと自動更新＋手動ボタン）。打刻一覧の初期期間も「今日を含む締め期間」に修正（従来は最終取込月基準で当日の打刻が範囲外になることがあった）。 // V96: 打刻理由ウィンドウ表示時、ビー玉→風船（出勤）/風船→ビー玉（退勤）の変身アニメと記念日花火を、ウィンドウが閉じた後に再生（ユーザー要望「せっかくのアニメーションが楽しめない」）
 function tcForceReloadLatest(){
   try{
     const sp=new URLSearchParams(location.search);
@@ -3288,6 +3288,7 @@ function renderPunchList(p){
     <b style="font-size:13px">🗄 月次自動バックアップ</b>
     <span class="muted" style="font-size:12px">　締め日（毎月11日）を過ぎて最初に管理者画面を開いたとき、前の締め期間（11日〜10日）の打刻一覧CSVを自動でダウンロード保存し、同じ期間の確定スナップショットをクラウド（snap_行）にも保存します（PDFは案内からワンタップ）。公式記録を保管したい事務所のパソコンでONにしてください。ダウンロード先をGoogleドライブの同期フォルダにすると、CSVが自動でGoogleドライブにも残ります。</span><br>
     <button class="btn ${autoBackupEnabled()?'':'ghost'}" id="autoBkToggle" style="margin-top:8px">${autoBackupEnabled()?'🟢 自動バックアップ ON（タップでOFF）':'⚪ 自動バックアップ OFF（タップでON）'}</button>
+    <button class="btn ghost" id="bkDirBtn" style="margin-top:8px">📁 保存先フォルダを選ぶ${(function(){try{const n=localStorage.getItem('tc_bkdir_name');return n?('（現在: '+n+'）'):'（未設定=ダウンロード）';}catch(e){return '';}})()}</button>
     <span class="muted" style="font-size:12px;margin-left:8px">${(()=>{const k=localStorage.getItem(AUTOBK_LAST);return k?('最終バックアップ済み期間: 〜'+k+'-10'):'まだ自動バックアップは動いていません。';})()}</span>
   </div>`;
   const pane=$('#plPane');
@@ -3303,6 +3304,7 @@ function renderPunchList(p){
   $('#plCSV').onclick=plExportCSV;
   $('#plPDF').onclick=plExportPDF;
   const bk=$('#autoBkToggle'); if(bk)bk.onclick=()=>{ const on=!autoBackupEnabled(); try{localStorage.setItem(AUTOBK_KEY,on?'1':'0');}catch(e){} renderPunchList(p); toast(on?'月次自動バックアップをONにしました（締め日明けに自動保存）':'自動バックアップをOFFにしました'); if(on)autoBackupTick(); };
+  const bd=$('#bkDirBtn'); if(bd)bd.onclick=pickBackupDir; // 【V110】
   // 【V97】クラウド打刻の取得（手動ボタン＋開いたとき60秒以上経っていれば自動）
   PL_LAST_P=p;
   const cp=$('#plCloudPullBtn'); if(cp)cp.onclick=async()=>{ cp.disabled=true; cp.textContent='☁ 取得中…'; await plCloudPull(true); renderPunchList(p); };
@@ -3312,10 +3314,10 @@ function renderPunchList(p){
   const sv=$('#plSealVerify'); if(sv)sv.onclick=async()=>{ sv.disabled=true; sv.textContent='🔗 検証中…'; try{await verifySeals();}finally{sv.disabled=false;sv.textContent='🔗 記録の検証';} };
   const av=$('#plAuditView'); if(av)av.onclick=showAuditLogModal;
 }
-function plExportCSV(){
+function plBuildCSV(){ // 【V110】CSV文字列とファイル名を組み立て（ダウンロード/フォルダ直書きの共通部）
   const {from,to}=plPeriod();
   const people=plPeople(PL_CLINIC,from,to);
-  if(!people.length){alert('期間内に打刻・予定のあるスタッフがいません。');return;}
+  if(!people.length)return null;
   const L=[];
   L.push(['打刻一覧（実打刻と丸め後の両方を記録）']);
   L.push(['期間',from,to]);
@@ -3329,9 +3331,39 @@ function plExportCSV(){
     plDailyRows(pp.code,from,to).forEach(r=>L.push([r.d,r.w,r.status,r.shs,r.she,r.pin,r.pout,r.rin,r.rout,r.late?'遅刻':'',r.punched?mmt(r.net):'',r.inR||'',r.outR||'']));
   });
   const csv='﻿'+L.map(row=>row.map(csvCell).join(',')).join('\r\n')+'\r\n';
-  const blob=new Blob([csv],{type:'text/csv;charset=utf-8'});const url=URL.createObjectURL(blob);
-  const a=document.createElement('a');a.href=url;a.download=`打刻一覧_${from}_${to}_${csvClinicFileById(PL_CLINIC)}.csv`;a.click();URL.revokeObjectURL(url);
-  toast(`打刻一覧CSV（${people.length}名・スタッフごとにブロック区切り）を書き出しました`);
+  return {csv, fname:`打刻一覧_${from}_${to}_${csvClinicFileById(PL_CLINIC)}.csv`, count:people.length};
+}
+function plExportCSV(){
+  const b=plBuildCSV();
+  if(!b){alert('期間内に打刻・予定のあるスタッフがいません。');return;}
+  const blob=new Blob([b.csv],{type:'text/csv;charset=utf-8'});const url=URL.createObjectURL(blob);
+  const a=document.createElement('a');a.href=url;a.download=b.fname;a.click();URL.revokeObjectURL(url);
+  toast(`打刻一覧CSV（${b.count}名・スタッフごとにブロック区切り）を書き出しました`);
+}
+/* ===== 【V110】自動バックアップの保存先フォルダ（File System Access API・IndexedDBにフォルダ権限を保存） ===== */
+function tcIdbGet(k){return new Promise(res=>{try{const r=indexedDB.open('tc_fs',1);r.onupgradeneeded=()=>r.result.createObjectStore('kv');r.onsuccess=()=>{try{const g=r.result.transaction('kv','readonly').objectStore('kv').get(k);g.onsuccess=()=>res(g.result);g.onerror=()=>res(null);}catch(e){res(null);}};r.onerror=()=>res(null);}catch(e){res(null);}});}
+function tcIdbSet(k,v){return new Promise(res=>{try{const r=indexedDB.open('tc_fs',1);r.onupgradeneeded=()=>r.result.createObjectStore('kv');r.onsuccess=()=>{try{const tx=r.result.transaction('kv','readwrite');tx.objectStore('kv').put(v,k);tx.oncomplete=()=>res(true);tx.onerror=()=>res(false);}catch(e){res(false);}};r.onerror=()=>res(false);}catch(e){res(false);}});}
+async function pickBackupDir(){ // 保存先フォルダを選ぶ（ボタンから・ユーザー操作必須）
+  if(typeof showDirectoryPicker!=='function'){alert('このブラウザはフォルダ直接保存に対応していません（パソコンのChrome/Edgeでお使いください）。従来どおりダウンロードフォルダに保存されます。');return;}
+  try{
+    const h=await showDirectoryPicker({mode:'readwrite'});
+    await tcIdbSet('bkdir',h);
+    try{localStorage.setItem('tc_bkdir_name',h.name);}catch(e){}
+    toast('保存先を「'+h.name+'」にしました。今後の自動バックアップCSVはこのフォルダへ直接保存されます');
+    if(PL_LAST_P)renderPunchList(PL_LAST_P);
+  }catch(e){ /* キャンセル */ }
+}
+async function writeBackupToDir(fname,content){ // 選択済みフォルダへ直接書き込み。不可ならfalse（呼び出し元がダウンロードにフォールバック）
+  try{
+    const h=await tcIdbGet('bkdir'); if(!h)return false;
+    const perm=await h.queryPermission({mode:'readwrite'});
+    if(perm!=='granted')return false; // 権限が切れている（ボタンから選び直すと復活）
+    const fh=await h.getFileHandle(fname,{create:true});
+    const w=await fh.createWritable();
+    await w.write(new Blob([content],{type:'text/csv;charset=utf-8'}));
+    await w.close();
+    return true;
+  }catch(e){ console.warn('dir write:',e&&e.message); return false; }
 }
 function plExportPDF(){
   const {from,to}=plPeriod();
@@ -3412,9 +3444,14 @@ function autoBackupTick(){
   const save=PL_FROM, save2=PL_TO, save3=PL_CLINIC;
   try{
     PL_FROM=p.from; PL_TO=p.to; PL_CLINIC='all';
-    plExportCSV(); // スタッフごとブロックのCSVを自動ダウンロード
+    const b=plBuildCSV(); // 【V110】保存先フォルダが選択済みなら直接書き込み（OneDrive等の同期フォルダ→自動でクラウドへ）
+    if(b){
+      writeBackupToDir(b.fname,b.csv).then(ok=>{
+        if(ok){toast(`🗄 締め期間 ${p.from}〜${p.to} のCSVを保存先フォルダ（${localStorage.getItem('tc_bkdir_name')||'選択済み'}）へ自動保存しました`);}
+        else{plExportCSV();toast(`🗄 締め期間 ${p.from}〜${p.to} の打刻一覧CSVを自動バックアップしました（ダウンロードに保存）`);}
+      });
+    }
     localStorage.setItem(AUTOBK_LAST,p.key);
-    toast(`🗄 締め期間 ${p.from}〜${p.to} の打刻一覧CSVを自動バックアップしました（ダウンロードに保存）`);
     pushSnapshot(p); // 【V99】クラウドにも締め期間の確定スナップショット行を保存（過去の版が残る・失敗しても打刻業務に影響なし）
     pushAuditLog(); sealTick(); // 【V107】未送信の改訂履歴と日次確定も同時に実施
     // PDFも保存できるようバナーを表示
