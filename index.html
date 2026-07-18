@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>クリニック タイムカード V104</title>
+<title>クリニック タイムカード V105</title>
 <style>
   :root{
     --bg:#10402c; --panel:#ffffff; --ink:#1f2a24; --muted:#6b7c72;
@@ -784,7 +784,7 @@ function hmOf(min){return `${pad2(Math.floor(min/60))}:${pad2(min%60)}`;}
 
 /* ===== シフト管理アプリ(クラウド/JSON)取り込み ===== */
 // ── 【V85】アプリ自動更新（古い端末がキャッシュされた旧版を表示し続けるのを防ぐ。シフトアプリと同方式）──
-const TC_APP_VERSION='V104'; // V104: 傾き検出を重力ベクトル復元方式に刷新（ユーザー報告: ホームボタン上の縦持ち・垂直立てでビー玉が左右へ偏る）。V103の角度合成(γcos+βsin)は端末がほぼ垂直のとき角度表現の特異点(ジンバルロック)で誤動作した。V104はβγから重力ベクトルの画面右成分 sinγ·cosβ·cos(ang)+sinβ·sin(ang) を計算＝どの持ち方・立て方でも「画面の右が下がったら右」。 // V103: iPad横向きでビー玉/風船の傾き反応が逆になる問題を修正（ユーザー報告）。原因=ev.gammaを画面回転の補正なしで使用→縦横で軸が入れ替わる。画面の回転角(screen.orientation.angle)でbeta/gammaを合成し「画面の右が下がったら右」に統一。保険として動き調整に「傾きの向きを反転」スイッチも追加。 // V102: 画面左上のバージョン表示が手書きのままV95で止まっていた問題を修正（ユーザー報告）。起動時にTC_APP_VERSIONから自動表示＝今後ズレない。 // V101: Service Worker(sw.js)導入＝リロード・起動のたびに必ずネットワークから最新HTMLを取得（ブラウザキャッシュに頼らない）。通信不能時のみ最後に成功した版で起動（オフライン耐性）。既存の2分ごと自動更新チェック(V100)は保険として継続。 // V100: 自動更新の再試行対応（ユーザー報告「リロードしてもV95のまま」）。従来は1タブにつき1回しか自動リロードを試みず、初回が古いキャッシュを掴むとそのタブは古いまま固まった→5分おきに再試行する方式に変更。 // V99: 正式データをクラウドへ（ユーザー要望「iPadはただの入力装置に。iPadは落下・故障の実績あり」）。(1)クラウド保存を『置き換え』→『読み出し→合成→書き込み』に＝クラウドに打刻が蓄積され、iPad初期化・故障でもクラウドの過去打刻は消えない。(2)起動時にクラウドから自動復元（自院行の欠け日付をローカルへ・合言葉保存済み端末のみ）＝新しいiPadに替えても合言葉だけで復帰。(3)月次自動バックアップ時に締め期間の確定スナップショットをクラウド(snap_YYYY-MM行)にも保存＝過去の版がクラウドに残る。 // V98: 打刻クラウドを全クリニック・全職種対応に。保存先を勤務地ごとの行(punch_ekimae等)に分離＝複数iPadの相互上書き事故を防止。閲覧側(打刻一覧/スマホ勤務状況)は全院の行をまとめて取得。この端末で作った打刻はこの端末が正(ext印の無い打刻はクラウドで上書きしない・pushはext印なしのみ)。勤務地選択をlocalStorage(tc_loc)に永続化。 // V97: 打刻データのクラウド共有＝管理者の打刻一覧が、iPadが自動保存した打刻(timecard_data)をクラウドから取得して表示（人事がどのPCからでもリアルタイムに勤務状況を確認できる・開くと自動取得＋1分ごと自動更新＋手動ボタン）。打刻一覧の初期期間も「今日を含む締め期間」に修正（従来は最終取込月基準で当日の打刻が範囲外になることがあった）。 // V96: 打刻理由ウィンドウ表示時、ビー玉→風船（出勤）/風船→ビー玉（退勤）の変身アニメと記念日花火を、ウィンドウが閉じた後に再生（ユーザー要望「せっかくのアニメーションが楽しめない」）
+const TC_APP_VERSION='V105'; // V105: 傾きの「校正」機能を追加（ユーザー報告: V104でも縦向きでビー玉が左右へ偏る＝この個体は画面回転角がOSから正しく取れていない可能性）。動き調整に📐校正ボタン=いつもの置き方でまっすぐ立てて押すと、その向きを「真下」として記憶（端末ごと・localStorage tc_tilt_calib）。以後は記憶した向きからのズレだけに反応。センサー診断表示（β/γ/回転角/傾き出力のライブ表示）も追加＝実機の生値で原因を特定できる。 // V104: 傾き検出を重力ベクトル復元方式に刷新（ユーザー報告: ホームボタン上の縦持ち・垂直立てでビー玉が左右へ偏る）。V103の角度合成(γcos+βsin)は端末がほぼ垂直のとき角度表現の特異点(ジンバルロック)で誤動作した。V104はβγから重力ベクトルの画面右成分 sinγ·cosβ·cos(ang)+sinβ·sin(ang) を計算＝どの持ち方・立て方でも「画面の右が下がったら右」。 // V103: iPad横向きでビー玉/風船の傾き反応が逆になる問題を修正（ユーザー報告）。原因=ev.gammaを画面回転の補正なしで使用→縦横で軸が入れ替わる。画面の回転角(screen.orientation.angle)でbeta/gammaを合成し「画面の右が下がったら右」に統一。保険として動き調整に「傾きの向きを反転」スイッチも追加。 // V102: 画面左上のバージョン表示が手書きのままV95で止まっていた問題を修正（ユーザー報告）。起動時にTC_APP_VERSIONから自動表示＝今後ズレない。 // V101: Service Worker(sw.js)導入＝リロード・起動のたびに必ずネットワークから最新HTMLを取得（ブラウザキャッシュに頼らない）。通信不能時のみ最後に成功した版で起動（オフライン耐性）。既存の2分ごと自動更新チェック(V100)は保険として継続。 // V100: 自動更新の再試行対応（ユーザー報告「リロードしてもV95のまま」）。従来は1タブにつき1回しか自動リロードを試みず、初回が古いキャッシュを掴むとそのタブは古いまま固まった→5分おきに再試行する方式に変更。 // V99: 正式データをクラウドへ（ユーザー要望「iPadはただの入力装置に。iPadは落下・故障の実績あり」）。(1)クラウド保存を『置き換え』→『読み出し→合成→書き込み』に＝クラウドに打刻が蓄積され、iPad初期化・故障でもクラウドの過去打刻は消えない。(2)起動時にクラウドから自動復元（自院行の欠け日付をローカルへ・合言葉保存済み端末のみ）＝新しいiPadに替えても合言葉だけで復帰。(3)月次自動バックアップ時に締め期間の確定スナップショットをクラウド(snap_YYYY-MM行)にも保存＝過去の版がクラウドに残る。 // V98: 打刻クラウドを全クリニック・全職種対応に。保存先を勤務地ごとの行(punch_ekimae等)に分離＝複数iPadの相互上書き事故を防止。閲覧側(打刻一覧/スマホ勤務状況)は全院の行をまとめて取得。この端末で作った打刻はこの端末が正(ext印の無い打刻はクラウドで上書きしない・pushはext印なしのみ)。勤務地選択をlocalStorage(tc_loc)に永続化。 // V97: 打刻データのクラウド共有＝管理者の打刻一覧が、iPadが自動保存した打刻(timecard_data)をクラウドから取得して表示（人事がどのPCからでもリアルタイムに勤務状況を確認できる・開くと自動取得＋1分ごと自動更新＋手動ボタン）。打刻一覧の初期期間も「今日を含む締め期間」に修正（従来は最終取込月基準で当日の打刻が範囲外になることがあった）。 // V96: 打刻理由ウィンドウ表示時、ビー玉→風船（出勤）/風船→ビー玉（退勤）の変身アニメと記念日花火を、ウィンドウが閉じた後に再生（ユーザー要望「せっかくのアニメーションが楽しめない」）
 function tcForceReloadLatest(){
   try{
     const sp=new URLSearchParams(location.search);
@@ -1804,18 +1804,25 @@ function popMarble(id,kind){
   }
 }
 let tiltEnabled=false, tiltPending=false;
-function tiltHandler(ev){ // 【V104】重力ベクトル復元方式: 角度の合成でなく重力の「画面右成分」を直接計算。垂直に立てても・どの向きでも「画面の右側が下がったら右へ」
+function tiltCalibDeg(){ try{const v=parseFloat(localStorage.getItem('tc_tilt_calib'));return isFinite(v)?v:0;}catch(e){return 0;} } // 【V105】校正角（度・端末ごと）
+function tiltHandler(ev){ // 【V104/V105】重力ベクトル復元方式＋校正: 重力の画面内ベクトルを計算し、校正した「まっすぐ」からのズレだけに反応
   const b=ev.beta, g=ev.gamma; if(g==null&&b==null)return;
   let ang=0;
   try{ ang=(screen.orientation&&typeof screen.orientation.angle==='number')?screen.orientation.angle:(typeof window.orientation==='number'?window.orientation:0); }catch(e){}
   const rad=ang*Math.PI/180, bR=(b||0)*Math.PI/180, gR=(g||0)*Math.PI/180;
-  // 重力ベクトルの端末座標成分: x=sinγ·cosβ（端末の右が下で+）, y=-sinβ（端末の上端が下で+）→ 画面回転angで画面右成分へ
-  let gx=Math.sin(gR)*Math.cos(bR)*Math.cos(rad)+Math.sin(bR)*Math.sin(rad); // -1..1（1=画面の右が真下）
+  // 重力ベクトルの端末座標成分: x=sinγ·cosβ（端末の右が下で+）, y=-sinβ（端末の上端が下で+）→ 画面回転angで画面座標へ
+  const gxd=Math.sin(gR)*Math.cos(bR), gyd=-Math.sin(bR);
+  const sx=gxd*Math.cos(rad)-gyd*Math.sin(rad);          // 画面右方向の重力成分（-1..1）
+  const sy=gxd*Math.sin(rad)+gyd*Math.cos(rad);          // 画面上方向の重力成分（立てて置くと約-1）
+  window.__tiltRaw={b:+(b||0).toFixed(1),g:+(g||0).toFixed(1),ang,sx:+sx.toFixed(3),sy:+sy.toFixed(3)}; // 診断表示・校正用
+  const th0=tiltCalibDeg()*Math.PI/180;                  // 校正: 記憶した「まっすぐ」が真下になるよう画面内で回転補正
+  let gx=sx*Math.cos(th0)+sy*Math.sin(th0);
   if(PHYS.tiltRev)gx=-gx;                                // 「傾きの向きを反転」スイッチ（動き調整・万一逆に感じる端末用）
   let deg=Math.asin(Math.max(-1,Math.min(1,gx)))*180/Math.PI; // 度に換算（従来の感度設定と互換）
   if(Math.abs(deg)<2)deg=0;                              // デッドゾーン（微振動を無視）
   const fullDeg=Math.max(8, 65 - PHYS.tiltSens*6);       // 感度：大きいほど小さい角度で最大に
   tiltTarget=Math.max(-1,Math.min(1, deg/fullDeg));
+  window.__tiltRaw.out=+tiltTarget.toFixed(2);
 }
 function enableTilt(silent){
   if(tiltEnabled||tiltPending)return;
@@ -2622,6 +2629,15 @@ function renderAdminPane(tab){
           <button class="btn ghost" id="physReset">標準に戻す</button>
           <span class="muted" style="font-size:12px">上のタブ「iPad打刻」を見ながら調整できます。</span>
         </div>
+        <hr style="border:0;border-top:1px solid var(--line);margin:16px 0">
+        <h2 style="font-size:14px;margin:0 0 6px">📐 傾きの校正（この端末だけ）</h2>
+        <p class="muted" style="margin:0 0 10px;font-size:12px">iPadを<b>いつもの置き方でまっすぐ</b>立てて「校正する」を押してください。その向きを「真下」として記憶し、以後はそこからのズレだけにビー玉が反応します。置き方を変えたら再度校正してください。</p>
+        <div class="row" style="gap:10px;align-items:center">
+          <button class="btn primary" id="tiltCalibBtn">📐 校正する</button>
+          <button class="btn ghost" id="tiltCalibClear">校正を消す</button>
+          <span class="muted" style="font-size:12px" id="tiltCalibNow">現在の校正: ${(function(){try{const v=parseFloat(localStorage.getItem('tc_tilt_calib'));return isFinite(v)?(v.toFixed(1)+'°'):'なし';}catch(e){return 'なし';}})()}</span>
+        </div>
+        <div id="tiltDiag" style="margin-top:10px;padding:8px 10px;background:#0f172a;color:#a5f3fc;border-radius:8px;font-family:monospace;font-size:12px;line-height:1.7">センサー診断: 値の受信待ち…（iPadを少し動かすと表示されます）</div>
       </div>`;
     rows.forEach(r=>{
       const sl=$('#ph-'+r.k), vv=$('#phv-'+r.k);
@@ -2629,6 +2645,23 @@ function renderAdminPane(tab){
         MARBLES.forEach(updateMarble); /* 大きさ即時反映 */ };
     });
     $('#physReset').onclick=()=>{ PHYS=Object.assign({},PHYS_DEFAULT); saveState(); MARBLES.forEach(updateMarble); renderAdmin(); toast('標準設定に戻しました'); };
+    // 【V105】傾き校正: 今の重力方向を「真下」として記憶
+    $('#tiltCalibBtn').onclick=()=>{
+      const r=window.__tiltRaw;
+      if(!r||Math.hypot(r.sx,r.sy)<0.25){ toast('センサー値がまだ届いていません。iPadを立てた状態で少し動かしてからもう一度押してください'); return; }
+      const th=Math.atan2(r.sx,-r.sy)*180/Math.PI; // 真下(0,-1)からのズレ角
+      try{localStorage.setItem('tc_tilt_calib',String(th.toFixed(2)));}catch(e){}
+      const el=$('#tiltCalibNow'); if(el)el.textContent='現在の校正: '+th.toFixed(1)+'°';
+      toast('校正しました。この向きを「まっすぐ」として記憶しました（この端末のみ）');
+    };
+    $('#tiltCalibClear').onclick=()=>{ try{localStorage.removeItem('tc_tilt_calib');}catch(e){} const el=$('#tiltCalibNow'); if(el)el.textContent='現在の校正: なし'; toast('校正を消しました'); };
+    // 【V105】センサー診断のライブ表示（原因特定用）
+    clearInterval(window.__tiltDiagIv);
+    window.__tiltDiagIv=setInterval(()=>{
+      const el=document.getElementById('tiltDiag'); if(!el){clearInterval(window.__tiltDiagIv);return;}
+      const r=window.__tiltRaw;
+      if(r)el.textContent=`β(前後)=${r.b}° γ(左右)=${r.g}° 回転角=${r.ang}° | 画面内重力 →${r.sx} ↑${r.sy} | 出力=${r.out==null?'—':r.out}（+右/−左）`;
+    },300);
   }else if(tab==='staffset'){
     p.innerHTML=`
     <div class="card" style="background:var(--soft);border:0;margin-bottom:16px">
