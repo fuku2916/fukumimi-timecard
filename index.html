@@ -794,7 +794,7 @@ function hmOf(min){return `${pad2(Math.floor(min/60))}:${pad2(min%60)}`;}
 
 /* ===== シフト管理アプリ(クラウド/JSON)取り込み ===== */
 // ── 【V85】アプリ自動更新（古い端末がキャッシュされた旧版を表示し続けるのを防ぐ。シフトアプリと同方式）──
-const TC_APP_VERSION='V112'; // V112: 【不具合修正】日付をまたぐと前日の打刻状態が残る問題（ユーザー報告: 7/22に退勤した青木さんが、iPadを開いたまま翌7/23に出勤しようとすると「🔁再出勤（中抜けから戻り）」ボタンが出てしまう）。真因＝画面表示用の打刻状態 s.rec は起動時・取込時・iPad再描画時にしか本日ぶんへ作り直されないが、iPadを開きっぱなしで深夜0時をまたいでも自動では再描画されないため、前日の退勤済み状態(s.rec.out)が翌朝まで残り、退勤済み扱い→再出勤ボタンが表示されていた。さらに再出勤を押すと logPunch が新しい today(7/23)へ前日の in/out ごとコピーしてしまう二次被害もあった。V112: (1)毎秒の時計更新(tickClock)で today の変化を検知し、変わったら refreshTodayPunchRecords()＋iPad再描画で自動リセット（放置画面も0時に切り替わる）。(2)保険として openPunch（ビー玉タップ時）の冒頭でも必ず本日ぶんへ作り直してから状態を読む＝古いビー玉をタップしても前日の状態を読まない。 // V111: 中抜け（1日2回出勤）の打刻対応（シフトアプリv251/252と対）。退勤済みでも「🔁再出勤」で2回目の出勤/退勤を打刻可能（PUNCHLOG recにin2/out2）。勤務中判定・ビー玉・KPI・打刻一覧（マトリクス2段表示/個人別/CSVに2回目列）・実働計算（各回ごとに休憩控除）・勤務状況の確認の修正欄・改ざん検知(canonは2回目がある日のみ拡張=過去の封印と互換)も対応。2回目の出勤は理由を聞かず丸めは15分切り上げ・2回目の退勤は予定終了との差で理由確認・丸めなし。 // V110: 月次自動バックアップの保存先フォルダ指定（ユーザー要望「CSVを自動でクラウド同期フォルダへ」）。打刻一覧の自動バックアップ欄に「📁 保存先フォルダを選ぶ」＝一度OneDrive/Googleドライブ等の同期フォルダを選べば、以後の自動バックアップCSVはダウンロードフォルダを経由せず直接そこへ書き込み（File System Access API・フォルダの権限が切れている時は従来のダウンロードにフォールバック）。 // V109: 表示スタッフ設定のクラウド中央管理（ユーザー方針「iPadはただの入力装置・設定やデータはクラウドで人事が管理」）。「打刻画面に表示するスタッフ」(HIDDEN)を settings_main行で全端末共有＝人事のPCで変更→各院のiPadへ自動反映（新しい更新が勝ち）。全端末が10分ごとにクラウドを自動取得（打刻・訂正・設定・退職ステータスの伝播が最大10分に短縮。従来はiPadは起動時のみ）。 // V108: V107の訂正伝播の仕上げ2点。(1)改訂履歴を適用した端末は自分のクラウド行も更新(schedulePush)＝所有端末の行に訂正が確実に反映される。(2)訂正適用済みの記録(aed印)は、古いクラウド行の値で巻き戻さないガードをマージに追加（訂正→行更新までの時間差で古い値が一瞬復活して見える問題の防止）。 // V107: 改ざん検知の二本柱（ユーザー要望・電子カルテ方式）。(1)打刻改訂履歴: 打刻の全ての修正（管理者修正・申告承認・原本へ戻す）をクラウドの追記型ログ(audit_log行)へ記録＝変更前後・日時・端末が消せない形で残る。ログは全端末が取得・適用するため、どの管理端末から修正しても全端末に伝播（所有権extの壁を越える正規の訂正経路）。(2)日次確定記録: 前日までの実打刻（原本優先）を日ごとにハッシュ化し、前日のハッシュを織り込んだ鎖(audit_seal行)として毎日確定＝過去のどこかを直接書き換えると検証で機械的に検知。「🔗記録の検証」「📜変更履歴」ボタンを打刻一覧に追加。 // V106: 打刻一覧マトリクスの凡例（上段=実打刻/下段=丸め後）を表の下→表の一番上に移動（ユーザー要望・下にあると気づかない）。 // V105: 傾きの「校正」機能を追加（ユーザー報告: V104でも縦向きでビー玉が左右へ偏る＝この個体は画面回転角がOSから正しく取れていない可能性）。動き調整に📐校正ボタン=いつもの置き方でまっすぐ立てて押すと、その向きを「真下」として記憶（端末ごと・localStorage tc_tilt_calib）。以後は記憶した向きからのズレだけに反応。センサー診断表示（β/γ/回転角/傾き出力のライブ表示）も追加＝実機の生値で原因を特定できる。 // V104: 傾き検出を重力ベクトル復元方式に刷新（ユーザー報告: ホームボタン上の縦持ち・垂直立てでビー玉が左右へ偏る）。V103の角度合成(γcos+βsin)は端末がほぼ垂直のとき角度表現の特異点(ジンバルロック)で誤動作した。V104はβγから重力ベクトルの画面右成分 sinγ·cosβ·cos(ang)+sinβ·sin(ang) を計算＝どの持ち方・立て方でも「画面の右が下がったら右」。 // V103: iPad横向きでビー玉/風船の傾き反応が逆になる問題を修正（ユーザー報告）。原因=ev.gammaを画面回転の補正なしで使用→縦横で軸が入れ替わる。画面の回転角(screen.orientation.angle)でbeta/gammaを合成し「画面の右が下がったら右」に統一。保険として動き調整に「傾きの向きを反転」スイッチも追加。 // V102: 画面左上のバージョン表示が手書きのままV95で止まっていた問題を修正（ユーザー報告）。起動時にTC_APP_VERSIONから自動表示＝今後ズレない。 // V101: Service Worker(sw.js)導入＝リロード・起動のたびに必ずネットワークから最新HTMLを取得（ブラウザキャッシュに頼らない）。通信不能時のみ最後に成功した版で起動（オフライン耐性）。既存の2分ごと自動更新チェック(V100)は保険として継続。 // V100: 自動更新の再試行対応（ユーザー報告「リロードしてもV95のまま」）。従来は1タブにつき1回しか自動リロードを試みず、初回が古いキャッシュを掴むとそのタブは古いまま固まった→5分おきに再試行する方式に変更。 // V99: 正式データをクラウドへ（ユーザー要望「iPadはただの入力装置に。iPadは落下・故障の実績あり」）。(1)クラウド保存を『置き換え』→『読み出し→合成→書き込み』に＝クラウドに打刻が蓄積され、iPad初期化・故障でもクラウドの過去打刻は消えない。(2)起動時にクラウドから自動復元（自院行の欠け日付をローカルへ・合言葉保存済み端末のみ）＝新しいiPadに替えても合言葉だけで復帰。(3)月次自動バックアップ時に締め期間の確定スナップショットをクラウド(snap_YYYY-MM行)にも保存＝過去の版がクラウドに残る。 // V98: 打刻クラウドを全クリニック・全職種対応に。保存先を勤務地ごとの行(punch_ekimae等)に分離＝複数iPadの相互上書き事故を防止。閲覧側(打刻一覧/スマホ勤務状況)は全院の行をまとめて取得。この端末で作った打刻はこの端末が正(ext印の無い打刻はクラウドで上書きしない・pushはext印なしのみ)。勤務地選択をlocalStorage(tc_loc)に永続化。 // V97: 打刻データのクラウド共有＝管理者の打刻一覧が、iPadが自動保存した打刻(timecard_data)をクラウドから取得して表示（人事がどのPCからでもリアルタイムに勤務状況を確認できる・開くと自動取得＋1分ごと自動更新＋手動ボタン）。打刻一覧の初期期間も「今日を含む締め期間」に修正（従来は最終取込月基準で当日の打刻が範囲外になることがあった）。 // V96: 打刻理由ウィンドウ表示時、ビー玉→風船（出勤）/風船→ビー玉（退勤）の変身アニメと記念日花火を、ウィンドウが閉じた後に再生（ユーザー要望「せっかくのアニメーションが楽しめない」）
+const TC_APP_VERSION='V113'; // V113: 【クラウドを唯一の正式データにする仕上げ3点】（ユーザー報告: ①シフトアプリで登録した新スタッフ(大滝未空)が取込で上がってこない ②退職者がいつまでも残る ③タブレットで出勤なのに管理者PCで出勤に見えない）。(1)打刻のクラウド自動保存を常時ON化＝真因はV89の自動保存が「手動でONにした端末だけ・90秒待ち・失敗時1時間後再送」でOFF端末や失敗端末の打刻がクラウドへ届かなかった→常時ON・打刻10秒後送信・失敗3分ごと再送・画面離脱時にも送信・未送信が2分続くか失敗中は画面上部に「⚠打刻がクラウド未保存」バッジ表示(tickClock)。(2)pushCloudをCAS化(シフトv322と同方式)＝読み取ったdata.updatedAtを条件にPATCH(data->>updatedAt=eq)し、同じ行(punch_勤務地)へ別端末が書いた場合は書かずに読み直して再試行×5＝後勝ちPOSTで他端末の打刻を巻き戻さない。行が無い初回のみ従来のupsert作成。(3)取込の突合NGを見える化＝「☁クラウドから取り込み」後にNGがいればalertで名前・理由・直し方(シフトアプリでジョブカンコード入力→保存→再取込。同姓は必須)を表示、取込タブにも⚠一覧(importNgListHTML)を常設＝新スタッフがコード未付与・同姓重複で黙って除外されない。あわせて取込タブに「退職として非表示中の人一覧」(retiredHiddenHTML)を表示＝退職者が残って見える場合に在籍ステータス未登録/コード不一致を自分で確認できる。 // V112:【不具合修正】日付をまたぐと前日の打刻状態が残る問題（ユーザー報告: 7/22に退勤した青木さんが、iPadを開いたまま翌7/23に出勤しようとすると「🔁再出勤（中抜けから戻り）」ボタンが出てしまう）。真因＝画面表示用の打刻状態 s.rec は起動時・取込時・iPad再描画時にしか本日ぶんへ作り直されないが、iPadを開きっぱなしで深夜0時をまたいでも自動では再描画されないため、前日の退勤済み状態(s.rec.out)が翌朝まで残り、退勤済み扱い→再出勤ボタンが表示されていた。さらに再出勤を押すと logPunch が新しい today(7/23)へ前日の in/out ごとコピーしてしまう二次被害もあった。V112: (1)毎秒の時計更新(tickClock)で today の変化を検知し、変わったら refreshTodayPunchRecords()＋iPad再描画で自動リセット（放置画面も0時に切り替わる）。(2)保険として openPunch（ビー玉タップ時）の冒頭でも必ず本日ぶんへ作り直してから状態を読む＝古いビー玉をタップしても前日の状態を読まない。 // V111: 中抜け（1日2回出勤）の打刻対応（シフトアプリv251/252と対）。退勤済みでも「🔁再出勤」で2回目の出勤/退勤を打刻可能（PUNCHLOG recにin2/out2）。勤務中判定・ビー玉・KPI・打刻一覧（マトリクス2段表示/個人別/CSVに2回目列）・実働計算（各回ごとに休憩控除）・勤務状況の確認の修正欄・改ざん検知(canonは2回目がある日のみ拡張=過去の封印と互換)も対応。2回目の出勤は理由を聞かず丸めは15分切り上げ・2回目の退勤は予定終了との差で理由確認・丸めなし。 // V110: 月次自動バックアップの保存先フォルダ指定（ユーザー要望「CSVを自動でクラウド同期フォルダへ」）。打刻一覧の自動バックアップ欄に「📁 保存先フォルダを選ぶ」＝一度OneDrive/Googleドライブ等の同期フォルダを選べば、以後の自動バックアップCSVはダウンロードフォルダを経由せず直接そこへ書き込み（File System Access API・フォルダの権限が切れている時は従来のダウンロードにフォールバック）。 // V109: 表示スタッフ設定のクラウド中央管理（ユーザー方針「iPadはただの入力装置・設定やデータはクラウドで人事が管理」）。「打刻画面に表示するスタッフ」(HIDDEN)を settings_main行で全端末共有＝人事のPCで変更→各院のiPadへ自動反映（新しい更新が勝ち）。全端末が10分ごとにクラウドを自動取得（打刻・訂正・設定・退職ステータスの伝播が最大10分に短縮。従来はiPadは起動時のみ）。 // V108: V107の訂正伝播の仕上げ2点。(1)改訂履歴を適用した端末は自分のクラウド行も更新(schedulePush)＝所有端末の行に訂正が確実に反映される。(2)訂正適用済みの記録(aed印)は、古いクラウド行の値で巻き戻さないガードをマージに追加（訂正→行更新までの時間差で古い値が一瞬復活して見える問題の防止）。 // V107: 改ざん検知の二本柱（ユーザー要望・電子カルテ方式）。(1)打刻改訂履歴: 打刻の全ての修正（管理者修正・申告承認・原本へ戻す）をクラウドの追記型ログ(audit_log行)へ記録＝変更前後・日時・端末が消せない形で残る。ログは全端末が取得・適用するため、どの管理端末から修正しても全端末に伝播（所有権extの壁を越える正規の訂正経路）。(2)日次確定記録: 前日までの実打刻（原本優先）を日ごとにハッシュ化し、前日のハッシュを織り込んだ鎖(audit_seal行)として毎日確定＝過去のどこかを直接書き換えると検証で機械的に検知。「🔗記録の検証」「📜変更履歴」ボタンを打刻一覧に追加。 // V106: 打刻一覧マトリクスの凡例（上段=実打刻/下段=丸め後）を表の下→表の一番上に移動（ユーザー要望・下にあると気づかない）。 // V105: 傾きの「校正」機能を追加（ユーザー報告: V104でも縦向きでビー玉が左右へ偏る＝この個体は画面回転角がOSから正しく取れていない可能性）。動き調整に📐校正ボタン=いつもの置き方でまっすぐ立てて押すと、その向きを「真下」として記憶（端末ごと・localStorage tc_tilt_calib）。以後は記憶した向きからのズレだけに反応。センサー診断表示（β/γ/回転角/傾き出力のライブ表示）も追加＝実機の生値で原因を特定できる。 // V104: 傾き検出を重力ベクトル復元方式に刷新（ユーザー報告: ホームボタン上の縦持ち・垂直立てでビー玉が左右へ偏る）。V103の角度合成(γcos+βsin)は端末がほぼ垂直のとき角度表現の特異点(ジンバルロック)で誤動作した。V104はβγから重力ベクトルの画面右成分 sinγ·cosβ·cos(ang)+sinβ·sin(ang) を計算＝どの持ち方・立て方でも「画面の右が下がったら右」。 // V103: iPad横向きでビー玉/風船の傾き反応が逆になる問題を修正（ユーザー報告）。原因=ev.gammaを画面回転の補正なしで使用→縦横で軸が入れ替わる。画面の回転角(screen.orientation.angle)でbeta/gammaを合成し「画面の右が下がったら右」に統一。保険として動き調整に「傾きの向きを反転」スイッチも追加。 // V102: 画面左上のバージョン表示が手書きのままV95で止まっていた問題を修正（ユーザー報告）。起動時にTC_APP_VERSIONから自動表示＝今後ズレない。 // V101: Service Worker(sw.js)導入＝リロード・起動のたびに必ずネットワークから最新HTMLを取得（ブラウザキャッシュに頼らない）。通信不能時のみ最後に成功した版で起動（オフライン耐性）。既存の2分ごと自動更新チェック(V100)は保険として継続。 // V100: 自動更新の再試行対応（ユーザー報告「リロードしてもV95のまま」）。従来は1タブにつき1回しか自動リロードを試みず、初回が古いキャッシュを掴むとそのタブは古いまま固まった→5分おきに再試行する方式に変更。 // V99: 正式データをクラウドへ（ユーザー要望「iPadはただの入力装置に。iPadは落下・故障の実績あり」）。(1)クラウド保存を『置き換え』→『読み出し→合成→書き込み』に＝クラウドに打刻が蓄積され、iPad初期化・故障でもクラウドの過去打刻は消えない。(2)起動時にクラウドから自動復元（自院行の欠け日付をローカルへ・合言葉保存済み端末のみ）＝新しいiPadに替えても合言葉だけで復帰。(3)月次自動バックアップ時に締め期間の確定スナップショットをクラウド(snap_YYYY-MM行)にも保存＝過去の版がクラウドに残る。 // V98: 打刻クラウドを全クリニック・全職種対応に。保存先を勤務地ごとの行(punch_ekimae等)に分離＝複数iPadの相互上書き事故を防止。閲覧側(打刻一覧/スマホ勤務状況)は全院の行をまとめて取得。この端末で作った打刻はこの端末が正(ext印の無い打刻はクラウドで上書きしない・pushはext印なしのみ)。勤務地選択をlocalStorage(tc_loc)に永続化。 // V97: 打刻データのクラウド共有＝管理者の打刻一覧が、iPadが自動保存した打刻(timecard_data)をクラウドから取得して表示（人事がどのPCからでもリアルタイムに勤務状況を確認できる・開くと自動取得＋1分ごと自動更新＋手動ボタン）。打刻一覧の初期期間も「今日を含む締め期間」に修正（従来は最終取込月基準で当日の打刻が範囲外になることがあった）。 // V96: 打刻理由ウィンドウ表示時、ビー玉→風船（出勤）/風船→ビー玉（退勤）の変身アニメと記念日花火を、ウィンドウが閉じた後に再生（ユーザー要望「せっかくのアニメーションが楽しめない」）
 function tcForceReloadLatest(){
   try{
     const sp=new URLSearchParams(location.search);
@@ -1047,26 +1047,32 @@ function buildCloudPayload(){
    トグル tc_autopush='1'。打刻後90秒のデバウンスでまとめて1回push（保存済み合言葉 tc_shiftpw を使用）。
    失敗はログ(tc_autopush_log)に記録し、次の打刻や1時間ごとの判定で再試行（打刻業務は妨げない）。 */
 const AUTOPUSH_KEY='tc_autopush', AUTOPUSH_LOG='tc_autopush_log';
-function autoPushEnabled(){try{return localStorage.getItem(AUTOPUSH_KEY)==='1';}catch(e){return false;}}
+// 【V113】打刻のクラウド保存は常時ON（旧: トグルで初期OFF）。
+//   タブレットで出勤になっているのに管理者PCで出勤に見えない不具合の真因＝
+//   打刻のクラウド保存が「手動でONにした端末だけ・90秒待ち・失敗時は1時間後にしか再送しない」だったため、
+//   OFFのままの端末や失敗した端末の打刻がクラウド（＝唯一の正式データ）に届かなかった。
+//   V113: 常時ON・10秒後送信・失敗は3分ごとに自動再送・未送信がある間は画面に警告表示。
+function autoPushEnabled(){return true;}
 function autoPushLog(){try{return JSON.parse(localStorage.getItem(AUTOPUSH_LOG)||'null');}catch(e){return null;}}
-let AUTOPUSH_TIMER=null, AUTOPUSH_DIRTY=false, AUTOPUSH_BUSY=false;
+let AUTOPUSH_TIMER=null, AUTOPUSH_DIRTY=false, AUTOPUSH_BUSY=false, AUTOPUSH_DIRTY_SINCE=0, AUTOPUSH_LAST_ERR='';
 function schedulePush(){ // 打刻ハンドラから呼ばれる
-  if(!autoPushEnabled())return;
+  if(!AUTOPUSH_DIRTY)AUTOPUSH_DIRTY_SINCE=Date.now();
   AUTOPUSH_DIRTY=true;
   clearTimeout(AUTOPUSH_TIMER);
-  AUTOPUSH_TIMER=setTimeout(runAutoPush,90*1000);
+  AUTOPUSH_TIMER=setTimeout(runAutoPush,10*1000); // 【V113】90秒→10秒（PCの打刻一覧は1分ごと取得なので、ほぼ次の更新で見える）
 }
 async function runAutoPush(){
-  if(AUTOPUSH_BUSY||!AUTOPUSH_DIRTY||!autoPushEnabled())return;
+  if(AUTOPUSH_BUSY||!AUTOPUSH_DIRTY)return;
   const pw=localStorage.getItem('tc_shiftpw')||'';
-  if(!pw){try{localStorage.setItem(AUTOPUSH_LOG,JSON.stringify({at:new Date().toISOString(),ok:false,msg:'合言葉が未保存'}));}catch(e){}return;}
+  if(!pw){AUTOPUSH_LAST_ERR='合言葉が未保存';try{localStorage.setItem(AUTOPUSH_LOG,JSON.stringify({at:new Date().toISOString(),ok:false,msg:'合言葉が未保存（取込タブで一度クラウド取込を実行してください）'}));}catch(e){}return;}
   AUTOPUSH_BUSY=true;
-  try{ await pushCloud(pw); AUTOPUSH_DIRTY=false; pushAuditLog();
-    localStorage.setItem(AUTOPUSH_LOG,JSON.stringify({at:new Date().toISOString(),ok:true,msg:'スマホ閲覧データを自動保存しました'}));
-  }catch(e){ try{localStorage.setItem(AUTOPUSH_LOG,JSON.stringify({at:new Date().toISOString(),ok:false,msg:String(e&&e.message||e)}));}catch(_e){}
+  try{ await pushCloud(pw); AUTOPUSH_DIRTY=false; AUTOPUSH_LAST_ERR=''; pushAuditLog();
+    localStorage.setItem(AUTOPUSH_LOG,JSON.stringify({at:new Date().toISOString(),ok:true,msg:'打刻をクラウドへ自動保存しました'}));
+  }catch(e){ AUTOPUSH_LAST_ERR=String(e&&e.message||e); try{localStorage.setItem(AUTOPUSH_LOG,JSON.stringify({at:new Date().toISOString(),ok:false,msg:AUTOPUSH_LAST_ERR}));}catch(_e){}
   }finally{AUTOPUSH_BUSY=false;}
 }
-setInterval(()=>{if(AUTOPUSH_DIRTY)runAutoPush();},60*60*1000); // 失敗分の再試行
+setInterval(()=>{if(AUTOPUSH_DIRTY)runAutoPush();},3*60*1000); // 【V113】失敗分の再試行 1時間→3分ごと
+window.addEventListener('visibilitychange',()=>{if(document.visibilityState==='hidden'&&AUTOPUSH_DIRTY)runAutoPush();}); // 【V113】画面を離れる瞬間にも送信
 function mergePayloadKeepCloud(cloud,local){ // 【V99】クラウド行を正とした安全合成: ローカルに無い日付・スタッフはクラウド側を温存（端末初期化で消えない）。同じ日付はローカル（打刻した端末＝訂正の反映元）優先
   if(!cloud||!cloud.staff)return local;
   const staff={};
@@ -1082,17 +1088,37 @@ function mergePayloadKeepCloud(cloud,local){ // 【V99】クラウド行を正�
 async function pushCloud(pw){
   const t=await sbLogin(pw);
   // 【V99】置き換えではなく 読み出し→合成→書き込み。クラウドが正式データ＝iPad側でデータが消えていても、クラウドの過去打刻を上書き削除しない
-  let cloudData=null;
-  try{
-    const r0=await fetch(SB_URL+'/rest/v1/timecard_data?id=eq.'+encodeURIComponent(cloudRowId())+'&select=data',
-      {cache:'no-store',headers:{apikey:SB_ANON,Authorization:'Bearer '+t,'Cache-Control':'no-cache',Pragma:'no-cache'}});
-    if(r0.ok){const rows=await r0.json();cloudData=(rows[0]&&rows[0].data)||null;}
-  }catch(e){}
-  const r=await fetch(SB_URL+'/rest/v1/timecard_data?on_conflict=id',
-    {method:'POST',headers:{apikey:SB_ANON,Authorization:'Bearer '+t,'Content-Type':'application/json',Prefer:'resolution=merge-duplicates,return=minimal'},
-     body:JSON.stringify({id:cloudRowId(),data:mergePayloadKeepCloud(cloudData,buildCloudPayload())})});
-  if(!r.ok)throw new Error('保存失敗（'+r.status+'）テーブル/権限をご確認ください');
-  return true;
+  // 【V113】CAS(compare-and-swap)化＝シフトアプリv322と同方式。読み取った updated_at を条件にPATCHし、
+  //   読み→書きのすき間に同じ行へ別端末（同院の別iPad・管理者PC）が書いた場合は、書かずに読み直して再試行。
+  //   従来のPOST upsertは後勝ちで、すき間に届いた他端末の打刻を古い合成結果で巻き戻す恐れがあった。
+  //   条件には data 内の updatedAt（毎回の保存で必ず更新される）を使う＝テーブル側の列構成に依存しない。
+  const rid=cloudRowId();
+  for(let a=0;a<5;a++){
+    let cloudData=null, exists=false;
+    try{
+      const r0=await fetch(SB_URL+'/rest/v1/timecard_data?id=eq.'+encodeURIComponent(rid)+'&select=data',
+        {cache:'no-store',headers:{apikey:SB_ANON,Authorization:'Bearer '+t,'Cache-Control':'no-cache',Pragma:'no-cache'}});
+      if(r0.ok){const rows=await r0.json();if(rows[0]){exists=true;cloudData=rows[0].data||null;}}
+    }catch(e){}
+    const merged=mergePayloadKeepCloud(cloudData,buildCloudPayload());
+    if(!exists){ // 行がまだ無い（初回）→ upsertで作成
+      const r=await fetch(SB_URL+'/rest/v1/timecard_data?on_conflict=id',
+        {method:'POST',headers:{apikey:SB_ANON,Authorization:'Bearer '+t,'Content-Type':'application/json',Prefer:'resolution=merge-duplicates,return=minimal'},
+         body:JSON.stringify({id:rid,data:merged})});
+      if(!r.ok)throw new Error('保存失敗（'+r.status+'）テーブル/権限をご確認ください');
+      return true;
+    }
+    const prevTs=cloudData&&cloudData.updatedAt?String(cloudData.updatedAt):'';
+    const cond=prevTs?('&data-%3E%3EupdatedAt=eq.'+encodeURIComponent(prevTs)):''; // data->>updatedAt をURLエンコード
+    const r=await fetch(SB_URL+'/rest/v1/timecard_data?id=eq.'+encodeURIComponent(rid)+cond+'&select=id',
+      {method:'PATCH',headers:{apikey:SB_ANON,Authorization:'Bearer '+t,'Content-Type':'application/json',Prefer:'return=representation'},
+       body:JSON.stringify({data:merged})});
+    if(!r.ok)throw new Error('保存失敗（'+r.status+'）テーブル/権限をご確認ください');
+    const wr=await r.json().catch(()=>null);
+    if(Array.isArray(wr)&&wr.length>0)return true; // 割り込みなく書けた
+    await new Promise(res=>setTimeout(res,200+Math.floor(Math.random()*400))); // 他端末が先に更新→読み直して再試行
+  }
+  throw new Error('保存失敗（他の端末の保存と重なり続けました。まもなく自動で再送されます）');
 }
 async function pullCloudStaff(pw,code){ // 【V98】全院の行から本人を探す（複数行にいる場合は保存時刻が新しい方）
   const t=await sbLogin(pw);
@@ -1693,10 +1719,27 @@ function exportPersonalXLSX(){
   XLSX.writeFile(wb,`勤務明細_${String(name).replace(/[\s　]/g,'')}_${S.from}_${S.to}.xlsx`);
   toast(`個人別明細（${name}・${S.from}〜${S.to}）を書き出しました`);
 }
+// 【V113】突合NGの詳細（誰が・なぜ・どう直すか）を表示に含める。
+//   従来は「突合NG N件」の件数だけで、新しく登録したスタッフ（例: 大滝未空さん）が
+//   コード未付与や同姓重複で黙って除外されていても気づけなかった。
+function importNgListHTML(ng){
+  if(!ng||!ng.length)return '';
+  const JOB_JP={nurse:'ナース',clerk:'クラーク',doctor:'ドクター'};
+  return `<div class="note" style="border-color:#f59e0b;background:#fffbeb;margin-top:8px"><b style="color:#b45309">⚠ 取り込めなかったスタッフ（${ng.length}名）</b><br>
+    ${ng.map(x=>`・<b>${x.name||'（名前なし）'}</b>（${JOB_JP[x.job]||x.job}）— ${x.reason||'突合できません'}`).join('<br>')}
+    <br><b>直し方:</b> シフト管理アプリの 設定 → スタッフ で、その人の<b>給与スタッフコード（ジョブカンのコード）</b>を入力して「保存」→ このタブでもう一度「☁ クラウドから取り込み」を実行してください。同姓のスタッフがいる場合はコードの入力が必須です。</div>`;
+}
+// 【V113】退職として打刻画面から自動的に隠れている人の一覧（「退職者が残っている」ように見える場合の確認用）
+function retiredHiddenHTML(){
+  const list=(IMPORT_STAFF||[]).filter(s=>isRetiredNow(s.id));
+  if(!list.length)return '';
+  return `<div class="note" style="margin-top:8px">🚪 在籍ステータス「退職」のため打刻画面に表示していない人: ${list.map(s=>s.name).join('、')}<br>
+    <span class="muted">※退職したはずの人がまだ打刻画面に出ている場合は、シフト管理アプリの在籍ステータスで「退職」（開始日入り）が登録されているか、給与スタッフコードが一致しているかをご確認ください。登録後にシフトを公開し、ここで再取込すると反映されます。</span></div>`;
+}
 function importSummaryHTML(){
   if(!IMPORT_INFO)return '<p class="muted">まだ取り込んでいません。</p>';
   const r=IMPORT_INFO.report||[];const ng=r.filter(x=>!x.ok);
-  return `<div class="note">取込月 <b>${IMPORT_INFO.month||'—'}</b> ／ 予定シフトのある人 <b>${Object.keys(SHIFTPLAN).length}</b>名 ／ 突合NG <b>${ng.length}</b>件。${NIGHT_BAND?`夜外来時間は <b>${NIGHT_BAND.s}–${NIGHT_BAND.e}</b> を取得。`:''} 集計タブ「打刻集計」の欠勤回数・遅刻/早退に反映されます。</div>
+  return `<div class="note">取込月 <b>${IMPORT_INFO.month||'—'}</b> ／ 予定シフトのある人 <b>${Object.keys(SHIFTPLAN).length}</b>名 ／ 突合NG <b>${ng.length}</b>件。${NIGHT_BAND?`夜外来時間は <b>${NIGHT_BAND.s}–${NIGHT_BAND.e}</b> を取得。`:''} 集計タブ「打刻集計」の欠勤回数・遅刻/早退に反映されます。</div>${importNgListHTML(ng)}${retiredHiddenHTML()}
     <div style="overflow:auto;max-height:320px"><table style="font-size:12px"><thead><tr><th>職種</th><th>シフト氏名</th><th>code</th><th>突合結果</th></tr></thead>
     <tbody>${r.map(x=>`<tr><td>${x.job}</td><td>${x.name}</td><td>${x.code||'—'}</td><td>${x.ok?`<span class="pill ok">${x.resolved}</span>`:`<span class="pill over">${x.reason||'NG'}</span>`}</td></tr>`).join('')}</tbody></table></div>`;
 }
@@ -2770,10 +2813,9 @@ function renderAdminPane(tab){
       <p class="muted" style="margin:0 0 10px">このタブレットの打刻・申請・アイコン・PINをクラウド（timecard_data）へ保存します。保存後、各スタッフは自分のスマホで「勤務状況の確認」をクラウド取得でき、管理者は打刻一覧でどのPCからでも確認できます。<br>
       <b>この端末の保存先: ${(LOCATIONS.find(l=>l.id===curLoc)||LOCATIONS[0]).short}クリニックの行（画面上部の勤務地に連動）</b>　※各院のiPadごとに保存先が分かれるため、他院のデータを上書きする心配はありません。</p>
       <button class="btn" id="cloudPush">⬆ 本人データをクラウドへ保存</button>
-      <button class="btn ${autoPushEnabled()?'':'ghost'}" id="autoPushToggle">${autoPushEnabled()?'🟢 打刻のたびに自動保存 ON（タップでOFF）':'⚪ 打刻のたびに自動保存 OFF（タップでON）'}</button>
-      <div class="note">合言葉は上のシフト取込と同じものを使います。保存先テーブル <code>timecard_data</code> はバックエンドでの作成が必要です（仕様書を別途お渡しします）。<br>
-      <b>自動保存をON</b>にすると、打刻（と理由選択）のたびに約90秒後、保存済みの合言葉で自動的にクラウドへ保存します＝各スタッフのスマホの「勤務状況の確認」がほぼリアルタイムで最新になります。実際に打刻に使うiPadでONにしてください。
-      ${(()=>{const g=autoPushLog();return g?('最終結果: '+new Date(g.at).toLocaleString('ja-JP')+' — '+(g.ok?'✅ ':'⚠ ')+g.msg):'';})()}</div>`;
+      <span class="pill ok" style="padding:6px 10px">🟢 打刻のたびに自動保存（常時ON）</span>
+      <div class="note">【V113】打刻のクラウド保存は<b>常時ON</b>になりました（設定不要・打刻の約10秒後に自動保存・失敗時は3分ごとに自動再送）。クラウドが唯一の正式データで、管理者PCの打刻一覧・各スタッフのスマホはクラウドを参照します。合言葉は上のシフト取込と同じものを使います（未保存の端末は一度「☁ クラウドから取り込み」を実行してください）。<br>
+      ${(()=>{const g=autoPushLog();return g?('最終結果: '+new Date(g.at).toLocaleString('ja-JP')+' — '+(g.ok?'✅ ':'⚠ ')+g.msg):'まだ自動保存は動いていません。';})()}</div>`;
     $('#cloudPush').onclick=async()=>{
       let pwv=$('#sbPw').value||localStorage.getItem('tc_shiftpw');
       if(!pwv){toast('合言葉を入力してください');return;}
@@ -2785,15 +2827,14 @@ function renderAdminPane(tab){
     $('#sbImport').onclick=async()=>{
       const pwv=$('#sbPw').value;localStorage.setItem('tc_shiftpw',pwv);
       const btn=$('#sbImport');btn.textContent='取り込み中…';btn.disabled=true;
-      try{const{ym}=await cloudImport(pwv);renderAdmin();toast(`シフト取り込み完了（${ym||'—'}）`);}
+      try{const{ym,rep}=await cloudImport(pwv);renderAdmin();toast(`シフト取り込み完了（${ym||'—'}）`);
+        // 【V113】突合できなかった人がいたら、その場で名前と直し方を知らせる（黙って除外しない）
+        const ngA=(rep||[]).filter(x=>!x.ok);
+        if(ngA.length)alert('⚠ 取り込めなかったスタッフが '+ngA.length+' 名います:\n\n'+ngA.map(x=>'・'+(x.name||'（名前なし）')+'（'+(x.reason||'突合できません')+'）').join('\n')+'\n\n【直し方】シフト管理アプリの 設定→スタッフ で、その人の「給与スタッフコード」（ジョブカンのコード）を入力して保存し、もう一度取り込んでください。同姓のスタッフがいる場合はコード入力が必須です。');
+      }
       catch(e){toast('取込失敗: '+e.message);btn.textContent='☁ クラウドから取り込み';btn.disabled=false;}
     };
-    $('#autoPushToggle').onclick=()=>{
-      const on=!autoPushEnabled();
-      try{localStorage.setItem(AUTOPUSH_KEY,on?'1':'0');}catch(e){}
-      renderAdmin();
-      toast(on?'打刻のたびの自動保存をONにしました':'打刻のたびの自動保存をOFFにしました');
-    };
+    // 【V113】自動保存トグルは廃止（常時ON）。AUTOPUSH_KEYは互換のため定数だけ残す。
     $('#autoSyncToggle').onclick=()=>{
       const on=!autoSyncEnabled();
       try{localStorage.setItem(AUTOSYNC_KEY,on?'1':'0');}catch(e){}
@@ -3616,6 +3657,15 @@ function fillLoc(){const sel=$('#locSel');LOCATIONS.forEach(l=>{const o=document
 $('#locSel').onchange=e=>{curLoc=e.target.value;try{localStorage.setItem('tc_loc',curLoc);}catch(_e){}setRole(curRole);};
 
 function tickClock(){const d=new Date();$('#clock').textContent=d.toLocaleString('ja-JP',{month:'2-digit',day:'2-digit',weekday:'short',hour:'2-digit',minute:'2-digit',second:'2-digit'});
+  // 【V113】クラウド未保存の打刻がある間は画面に警告（クラウド=唯一の正式データ。送信失敗を黙って抱えない）
+  try{
+    let b=document.getElementById('tcPushWarn');
+    const warn=AUTOPUSH_DIRTY&&(AUTOPUSH_LAST_ERR||Date.now()-AUTOPUSH_DIRTY_SINCE>120000);
+    if(warn){
+      if(!b){b=document.createElement('div');b.id='tcPushWarn';b.style.cssText='position:fixed;top:6px;left:50%;transform:translateX(-50%);z-index:9999;background:#fef3c7;border:1px solid #f59e0b;color:#92400e;font-size:12px;font-weight:700;padding:4px 12px;border-radius:999px;box-shadow:0 2px 6px rgba(0,0,0,.15)';document.body.appendChild(b);}
+      b.textContent='⚠ 打刻がクラウド未保存です（自動再送中'+(AUTOPUSH_LAST_ERR?'・'+AUTOPUSH_LAST_ERR:'')+'）';
+    }else if(b){b.remove();}
+  }catch(_e){}
   // 【V112】日付跨ぎの自動リセット。iPadを開きっぱなしで深夜0時を越えると、前日の打刻状態(s.rec)が
   //   残ったままになり「退勤済み→再出勤」ボタンが翌朝も出てしまう不具合の対策（ユーザー報告: 7/22退勤の青木さんが
   //   7/23の出勤で再出勤になっていた）。todayが変わったら s.rec を本日ぶんへ作り直し、iPad画面を再描画する。
