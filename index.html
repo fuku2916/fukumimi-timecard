@@ -1654,7 +1654,7 @@ async function openDeviceHealthView(){
       if(d.authNg)bad.push('⚠合言葉NG');
       if((Date.now()-new Date(d.at).getTime())>7*864e5)bad.push('⚠1週間以上未報告');
       rows.push('<tr style="'+(bad.length?'background:#fef2f2':'')+'">'
-        +'<td>'+(d.role||'')+'（'+(d.ua||'')+'）</td>'
+        +'<td>'+(d.role||'')+'（'+(d.ua||'')+'）<br><span class="muted" style="font-size:10px">'+[d.plat||'',d.scr||'',(d.touch!=null?'touch'+d.touch:''),d.br||'',d.pwa||''].filter(Boolean).join(' / ')+'</span></td>'
         +'<td>'+(locNameById(d.loc)||d.loc||'')+'</td>'
         +'<td>'+(d.ver||'')+'</td>'
         +'<td style="text-align:right">'+(d.usedMB!=null?d.usedMB+'MB / '+d.pct+'%':'')+'</td>'
@@ -3913,6 +3913,10 @@ function deviceHealth(){
     loc:(typeof curLoc!=='undefined'?curLoc:''),
     role:(localStorage.getItem('tc_admin_device')==='1'?'管理PC':'打刻端末'),
     ua:deviceKind(),
+    // 【V186】端末の識別情報。これが無かったため「Macが1台のはずなのに2台出る」を判別できなかった。
+    plat:(navigator.platform||''), touch:(navigator.maxTouchPoints||0),
+    scr:(screen.width+'x'+screen.height), pwa:(matchMedia('(display-mode: standalone)').matches?'ホーム画面アプリ':'ブラウザ'),
+    br:(navigator.userAgent.indexOf('CriOS')>=0||navigator.userAgent.indexOf('Chrome')>=0)?'Chrome':(navigator.userAgent.indexOf('Safari')>=0?'Safari':'other'),
     saveOk:SAVE_STATUS.ok, saveMode:SAVE_STATUS.mode, saveErr:SAVE_STATUS.err,
     usedMB:+(si.used/1048576).toFixed(2), pct:si.pct,
     planCount:cov.count, planLast:cov.last, planOk:cov.ok,
