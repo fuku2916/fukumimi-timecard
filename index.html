@@ -935,6 +935,10 @@ function planStartsOnDate(date,unit){
 }
 function payrollInMin(code,date,rec,unit){
   const pi=rec&&rec.in?toMin(rec.in):null; if(pi==null)return null;
+  // 【V183】医師は丸めない＝実打刻そのまま。麻酔科の非常勤医は出来高制、他の非常勤医は打刻時刻が
+  //   そのまま給与に直結し、常勤医は固定給で勤務時間の丸めが給与に影響しないため、全員一律で実打刻とする。
+  //   （診察開始9:30より前に出勤していればよい＝遅刻判定は従来どおり noJudge で行わない）
+  if(unit==='doctor')return pi;
   const sh=SHIFTPLAN[code]&&SHIFTPLAN[code][date];
   let ss=(sh&&sh.start)?toMin(sh.start):null;
   if(ss==null){                                     // 予定の無い日＝代わりの出勤
