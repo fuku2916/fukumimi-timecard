@@ -1654,7 +1654,7 @@ async function openDeviceHealthView(){
     (note?'<div class="note" style="border-color:#fca5a5;background:#fef2f2;color:#b91c1c">'+note+'</div>':'')
     +'<div class="note">各端末が起動時と6時間ごとに自分の状態を報告します。<b>保存できていない端末は、取り込みも修正も画面を開き直すと元に戻ります</b>（2026-09-14に管理PC1台で約1ヶ月発生）。該当端末では赤いバナーから「🧹 不要データを整理する」を実行してください。</div>'
     +(rows.length?'<table style="font-size:12px"><thead><tr><th>端末</th><th>勤務地</th><th>版</th><th>保存容量</th><th>今期の予定</th><th>予定の最終日</th><th>最終報告</th><th>状態</th></tr></thead><tbody>'+rows.join('')+'</tbody></table>'
-      :'<p class="muted">まだ報告がありません。各端末でこの版が起動すると、20秒後に報告されます。</p>'));
+      :'<p class="muted">まだ報告がありません。各端末でこの版が起動すると、20秒後に報告されます。</p>'),true);
 }
 async function openAccessLogView(){ // スタッフ設定「🗒 操作ログ」
   let entries=[]; let note='';
@@ -3687,9 +3687,9 @@ function refreshAdminKpi(){
   $('#adDev').textContent=dev;
 }
 // ダッシュボードの数字をダブルクリック→該当者一覧をモーダル表示
-function openListModal(title,bodyHtml){
+function openListModal(title,bodyHtml,wide){ // 【V184】wide=列の多い表（端末の状態など）は広く開く
   const box=$('#modalBox');
-  box.style.maxWidth='560px';
+  box.style.maxWidth=wide?'1040px':'560px';
   box.innerHTML=`<h3 style="margin:0 0 10px;font-size:18px">${title}</h3>
     <div style="text-align:left;max-height:60vh;overflow:auto">${bodyHtml}</div>
     <button class="btn ghost" style="margin-top:12px" onclick="closeModal()">閉じる</button>`;
