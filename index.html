@@ -869,6 +869,62 @@ function netWork(rec){ // 【V111】中抜け対応: 実働=各回(退勤-出勤
 }
 function isWorkingRec(r){return !!(r&&((r.in&&!r.out)||(r.in2&&!r.out2)));} // 【V111】1回目または2回目の勤務中
 
+/* ===== 【V183】1日分の勤務計算（中抜け対応・職種別の休憩ルール） =====
+   ユーザー報告:「松枝さんの夜勤務が0時間」。原因は中抜け勤務の2回目(in2/out2)を
+   集計がまったく読んでいなかったこと。夜勤務だけでなく実労働時間からも2回目が
+   丸ごと抜け落ちていた（9名・松枝さんで26時間13分）。
+
+   ■看護師・クラーク
+     休憩 = max(実際に打刻された中抜け時間, 法定の自動控除)
+       ・41分しか休んでいなくても法定45分を控除する（休憩を削ると手取りが増える、
+         という逆インセンティブを作らないため）
+       ・57分休んだ日は57分控除する（休憩分を支給してしまわないため）
+     休憩は中抜けの開始時刻から連続して取ったものとみなし、2回目の勤務開始を後ろへずらす。
+     こうすると「実労働 = 昼の分 + 夜勤務」がぴったり一致する。
+   ■医師（常勤・非常勤・麻酔科とも）
+     休憩という扱いをしない。打刻された勤務区間をそのまま合算する（離席分のみ差し引く）。
+
+   戻り値 segs は夜勤務の算出に使う実勤務区間 [[開始分,終了分],...]。       */
+function dayWorkCalc(r,isDoctor){
+  if(!r||!r.in||!r.out)return null;
+  const i1=toMin(r.in), o1=toMin(r.out);
+  if(i1==null||o1==null||o1<=i1)return null;
+  let i2=null,o2=null;
+  if(r.in2&&r.out2){const a=toMin(r.in2),b=toMin(r.out2);
+    if(a!=null&&b!=null&&b>a&&a>=o1){i2=a;o2=b;}}   // 2回目は1回目の退勤以降のみ有効
+  if(isDoctor){                                     // 医師=休憩控除なし・打刻どおり
+    const segs=(i2!=null)?[[i1,o1],[i2,o2]]:[[i1,o1]];
+    return {segs, net:segs.reduce((t,x)=>t+(x[1]-x[0]),0), brk:0, firstIn:i1, lastOut:segs[segs.length-1][1]};
+  }
+  if(i2!=null){                                     // 中抜けあり=実測と法定の多いほうを控除
+    const brk=Math.max(i2-o1, autoBreak((o1-i1)+(o2-i2)));
+    const segs=[[i1,o1],[Math.min(o1+brk,o2),o2]];
+    return {segs, net:segs.reduce((t,x)=>t+Math.max(0,x[1]-x[0]),0), brk, firstIn:i1, lastOut:o2};
+  }
+  const b=autoBreak(o1-i1);                         // 中抜けなし=従来どおり自動控除
+  return {segs:[[i1,o1]], net:(o1-i1)-b, brk:b, firstIn:i1, lastOut:o1};
+}
+// 勤務区間のうち夜診開始(既定16:00)以降にあたる分。休憩は昼側から引く前提のため net で頭打ちにする。
+function nightMinOfSegs(segs,net,band){
+  if(!band)return 0;
+  const bs=toMin(band.s||band.start); if(bs==null)return 0;
+  return Math.min(net, segs.reduce((t,x)=>t+Math.max(0,x[1]-Math.max(x[0],bs)),0));
+}
+// 夜勤務の集計対象=非常勤の看護師・クラークのみ（常勤・医師は対象外）
+function nightBandForStaff(unit,emp){
+  return ((unit==='nurse'||unit==='clerk')&&emp==='parttime') ? (NIGHT_BAND||{s:'16:00'}) : null;
+}
+// 【V183】非常勤医師の4時間以上の連続打刻＝打刻もれの可能性が高いので注意喚起する
+function longPunchDays(log,from,to,unit,emp){
+  if(unit!=='doctor'||emp==='fulltime')return [];
+  return Object.keys(log).filter(d=>d>=from&&d<=to).filter(d=>{
+    const r=log[d]; if(!r)return false;
+    return [[r.in,r.out],[r.in2,r.out2]].some(p=>{
+      if(!p[0]||!p[1])return false;
+      const a=toMin(p[0]),b=toMin(p[1]); return a!=null&&b!=null&&(b-a)>=240;});
+  }).sort();
+}
+
 // 夜診察の時間帯（WAGE_BANDS の '夜外来'）に入った労働分
 function nightBandMin(s){
   const nb=NIGHT_BAND||(WAGE_BANDS[s.loc]||[]).find(b=>b.label==='夜外来');
@@ -2142,28 +2198,26 @@ function aggregateRangeRows(from,to,clinicFilter='all',unitFilter='all',q=''){
     const incomplete=[]; // 【V132】片方しか打刻が無い日（欠勤ではなく要修正）
     const groupClinic=(clinicFilter==='all')?staffPayrollClinic(s):clinicFilter;
     const nb=NIGHT_BAND||(WAGE_BANDS[groupClinic]||WAGE_BANDS[s.loc]||[]).find(x=>x.label==='夜外来'); // ※半有(午前休)の遅刻判定基準など、夜勤集計以外にも使う既存の割増時間帯
-    // 【v81修正】夜勤集計(「夜勤務」列)の対象は「非常勤の看護師・クラーク」のみ（常勤・医師は対象外）。
-    //   開始時刻は、シフト側の実際の夜外来開始16:00に合わせる（従来はWAGE_BANDSの18:00が既定値になっており、
-    //   シフト側16:00とズレて夜勤が0時間になるバグがあった。管理者が「割増時間帯」を設定していればそちらを優先）。
+    // 【V183】夜勤務(「（内訳）夜勤務」列)の対象は非常勤の看護師・クラークのみ。開始はシフト側の夜外来16:00に合わせる
+    //   （従来はWAGE_BANDSの18:00が既定値でシフト側とズレていた。管理者が割増時間帯を設定していればそちらを優先）。
     const staffUnit=CODE_UNIT[s.id]||s.unit||'';
     const staffEmp=s.emp||'parttime';
-    const nightEligible=(staffUnit==='nurse'||staffUnit==='clerk')&&staffEmp==='parttime';
-    const nightBand=nightEligible?(NIGHT_BAND||{s:'16:00'}):null;
+    const isDoctor=staffUnit==='doctor';
+    const nightBand=nightBandForStaff(staffUnit,staffEmp);
     Object.keys(log).filter(d=>inR(d)&&includeDateForClinic(s,d,clinicFilter)).forEach(d=>{
-      const r=log[d];if(!r||!r.in||!r.out)return;
-      const g=toMin(r.out)-toMin(r.in);if(g<=0)return;
-      const b=autoBreak(g), nt=g-b;
-      days++; net+=nt; brk+=b; ot+=Math.max(0,nt-480);
-      if(nightBand)night+=Math.max(0,toMin(r.out)-Math.max(toMin(r.in),toMin(nightBand.s||nightBand.start))); // 夜勤務=夜診開始(16:00)以降の労働すべて（終了時刻で打ち切らない）。対象は非常勤の看護師・クラークのみ
+      const r=log[d];
+      const w=dayWorkCalc(r,isDoctor); if(!w)return;   // 【V183】中抜け(in2/out2)を含めて1日分を計算
+      days++; net+=w.net; brk+=w.brk; ot+=Math.max(0,w.net-480);
+      night+=nightMinOfSegs(w.segs,w.net,nightBand);
       const sh=plan?(plan[d]||null):(s.shift?{start:s.shift.s,end:s.shift.e}:null); // 予定表がある人は、予定のない日（休日出勤）を判定しない
       if(sh&&!s.noJudge){ // 【v80】noJudge職員（医師・手術担当等）は遅刻・早退を判定しない
         // 【V169】判定基準=コマの定時(jin/jout・マージン無し)＋TOL(5分)猶予＝画面の判定表示と同じ基準。
         //   従来はマージン込みのstart/endに猶予ゼロで、見かけの遅刻・早退が大量計上されていた。
         const _jin=toMin(sh.jin||sh.start), _jout=toMin(sh.jout||sh.end);
         const lateBase=(lv&&lv[d]==='paid_pm')?Math.max(_jin,toMin((nb&&(nb.s||nb.start))||'15:45')):_jin; // 【v78】半有(午前有休)の日は午後コマ開始(夜診)を基準に遅刻判定
-        const din=toMin(r.in)-lateBase; if(din>TOL){lateN++;lateMin+=din;}
+        const din=w.firstIn-lateBase; if(din>TOL){lateN++;lateMin+=din;}
         if((s.emp||'parttime')==='fulltime'){ // 早退は常勤のみ判定。パートは「仕事が終われば退勤」のため判定しない
-          const dout=_jout-toMin(r.out); if(dout>TOL){earlyN++;earlyMin+=dout;}
+          const dout=_jout-w.lastOut; if(dout>TOL){earlyN++;earlyMin+=dout;} // 【V183】中抜けの日は最後の退勤で判定（従来は1回目の退勤＝毎回早退扱いだった）
         }
       }
     });
@@ -2196,6 +2250,7 @@ function aggregateRangeRows(from,to,clinicFilter='all',unitFilter='all',q=''){
       fmtDur(net), fmtDur(brk), fmtDur(lateMin), fmtDur(earlyMin),
       '', fmtDur(ot), '', usedLeave||'', (remainLeave!=null?remainLeave:''), '', fmtDur(night)];
     row.incomplete=incomplete; // 【V132】画面で「打刻もれ」を知らせるために添える（CSV/Excelの18列には出さない）
+    row.longPunch=longPunchDays(log,from,to,staffUnit,staffEmp); // 【V183】非常勤医師の4時間以上の連続打刻（打刻もれの疑い）
     return row;
   }).filter(r=>{
     const hasData=Number(r[3]||0)>0||Number(r[4]||0)>0||r[7]||r[12]||r[17]||Number(r[14]||0)>0;
@@ -2249,12 +2304,12 @@ function personalDailyRows(code,from,to){
   const log=PUNCHLOG[code]||{}, plan=SHIFTPLAN[code]||{}, lv=LEAVEPLAN[code]||{};
   const W=['日','月','火','水','木','金','土'];
   const rows=[];
-  // 【v81修正】夜勤集計の対象は「非常勤の看護師・クラーク」のみ。開始16:00（aggregateRangeRowsと同じ基準）
-  const _pdrStaff=tcSearchPeople().find(x=>String(x.id)===String(code))||{};
-  const _pdrUnit=CODE_UNIT[code]||_pdrStaff.unit||'';
-  const _pdrEmp=_pdrStaff.emp||'parttime';
-  const _pdrNightEligible=(_pdrUnit==='nurse'||_pdrUnit==='clerk')&&_pdrEmp==='parttime';
-  const _pdrNightBand=_pdrNightEligible?(NIGHT_BAND||{s:'16:00'}):null;
+  // 【V183】計算は aggregateRangeRows と同じ共通関数に揃える（中抜け対応・職種別の休憩ルール）
+  const _st=tcSearchPeople().find(x=>String(x.id)===String(code))||{};
+  const _unit=CODE_UNIT[code]||_st.unit||'';
+  const _emp=_st.emp||'parttime';
+  const _isDoc=_unit==='doctor';
+  const _nightBand=nightBandForStaff(_unit,_emp);
   for(let dt=parseDateLocal(from);dateYMD(dt)<=to;dt=addDays(dt,1)){
     const d=dateYMD(dt);
     const r=log[d]||null, sh=plan[d]||null, leave=(lv&&lv[d])||'';
@@ -2263,17 +2318,18 @@ function personalDailyRows(code,from,to){
     const punched=!!(r&&r.in&&r.out);
     const status=dayStatusLabel(code,d,r,sh,leave); // 【V140】未来日=予定・片方だけ打刻=打刻もれ・欠勤は終わった日だけ
     let net=0,b=0,ot=0,outside=0,night=0;
-    if(punched){
-      const g=toMin(r.out)-toMin(r.in);
-      if(g>0){b=autoBreak(g);net=g-b;ot=Math.max(0,net-480);
-        if(sh)outside=Math.max(0,toMin(sh.start)-toMin(r.in))+Math.max(0,toMin(r.out)-toMin(sh.end));
-        else outside=net;
-        const nb=_pdrNightBand;if(nb)night=Math.max(0,toMin(r.out)-Math.max(toMin(r.in),toMin(nb.s||nb.start))); // 夜勤務=夜診開始(16:00)以降の労働すべて（終了時刻で打ち切らない）。対象は非常勤の看護師・クラークのみ
-      }
+    const w=punched?dayWorkCalc(r,_isDoc):null;
+    if(w){
+      net=w.net; b=w.brk; ot=Math.max(0,net-480);
+      night=nightMinOfSegs(w.segs,net,_nightBand);
+      if(sh)outside=Math.max(0,toMin(sh.start)-w.firstIn)+Math.max(0,w.lastOut-toMin(sh.end)); // 【V183】中抜けの日は最後の退勤で判定
+      else outside=net;
     }
     rows.push({d,label:`${pad2(dt.getMonth()+1)}/${pad2(dt.getDate())}(${W[dow]})`,dow,status,
       holiday:dow===0?'法定休日':'',
-      shs:sh?sh.start:'',she:sh?sh.end:'',jin:sh?(sh.jin||sh.start):'',jout:sh?(sh.jout||sh.end):'',pin:(r&&r.in)||'',pout:(r&&r.out)||'',
+      shs:sh?sh.start:'',she:sh?sh.end:'',jin:sh?(sh.jin||sh.start):'',jout:sh?(sh.jout||sh.end):'',
+      pin:(r&&r.in)||'',pout:(r&&r.out)||'',
+      pin2:(r&&r.in2)||'',pout2:(r&&r.out2)||'', // 【V183】中抜けの2回目も明細に出す
       net,brk:b,ot,outside,night,punched});
   }
   return rows;
@@ -2292,7 +2348,7 @@ function exportPersonalXLSX(){
   const all=sum(dr.filter(x=>x.punched)),w=sum(dr.filter(x=>x.punched&&x.dow!==0)),h=sum(dr.filter(x=>x.punched&&x.dow===0));
   const absent=dr.filter(x=>x.status==='欠勤').length;
   let late=0,early=0;
-  dr.forEach(x=>{if(x.punched&&x.jin){if(toMin(x.pin)-toMin(x.jin)>TOL)late++;if(toMin(x.jout)-toMin(x.pout)>TOL)early++;}}); // 【V169】判定はコマ定時基準
+  dr.forEach(x=>{if(x.punched&&x.jin){if(toMin(x.pin)-toMin(x.jin)>TOL)late++;if(toMin(x.jout)-toMin(x.pout2||x.pout)>TOL)early++;}}); // 【V169】判定はコマ定時基準【V183】中抜けの日は最後の退勤で判定
   const aoa=[
     [`勤務明細　${S.from} 〜 ${S.to}`],[],
     ['スタッフ情報','','','','基本項目'],
@@ -2302,12 +2358,12 @@ function exportPersonalXLSX(){
     ['総合','','','平日','','','休日','',''],
     ['労働時間','残業時間','深夜時間','労働時間','残業時間','深夜時間','労働時間','残業時間','深夜時間'],
     [mmt(all.net),mmt(all.ot),'00:00',mmt(w.net),mmt(w.ot),'00:00',mmt(h.net),mmt(h.ot),'00:00'],[],
-    ['日付','勤怠状況','休日区分','打刻場所','シフト開始時刻','シフト終了時刻','出勤時刻','退勤時刻','実労働時間','シフト外労働時間','実残業時間','実深夜時間','休憩時間','有休時間'],
-    ...dr.map(x=>[x.label,x.status,x.holiday,'(総計)',x.shs,x.she,x.pin,x.pout,
+    ['日付','勤怠状況','休日区分','打刻場所','シフト開始時刻','シフト終了時刻','出勤時刻','退勤時刻','再出勤時刻','再退勤時刻','実労働時間','シフト外労働時間','実残業時間','実深夜時間','休憩時間','有休時間'], // 【V183】中抜けの2回目を追加
+    ...dr.map(x=>[x.label,x.status,x.holiday,'(総計)',x.shs,x.she,x.pin,x.pout,x.pin2||'',x.pout2||'',
       x.punched?mmt(x.net):'',x.punched?mmt(x.outside):'',x.punched?mmt(x.ot):'','00:00',x.punched?mmt(x.brk):'',''])
   ];
   const ws=XLSX.utils.aoa_to_sheet(aoa);
-  ws['!cols']=[{wch:11},{wch:9},{wch:9},{wch:9},{wch:13},{wch:13},{wch:9},{wch:9},{wch:10},{wch:15},{wch:10},{wch:10},{wch:9},{wch:9}];
+  ws['!cols']=[{wch:11},{wch:9},{wch:9},{wch:9},{wch:13},{wch:13},{wch:9},{wch:9},{wch:9},{wch:9},{wch:10},{wch:15},{wch:10},{wch:10},{wch:9},{wch:9}];
   const wb=XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb,ws,'個人別明細');
   XLSX.writeFile(wb,`勤務明細_${String(name).replace(/[\s　]/g,'')}_${S.from}_${S.to}.xlsx`);
@@ -3981,6 +4037,14 @@ function renderAdminPane(tab){
       return `<div class="note" style="border-color:#fca5a5;background:#fef2f2;color:#b91c1c">
         ⚠ <b>打刻もれ ${n}件</b>（出勤か退勤の片方しか打刻がない日）。実労働時間が計算できないため<b>実働日数にも欠勤にも入っていません</b>。「勤務状況の確認」タブで打刻を補ってください。<br>
         ${bad.map(r=>`<span style="display:inline-block;margin:3px 10px 0 0"><b>${r[1]}</b>: ${r.incomplete.join('、')}</span>`).join('')}
+      </div>`;})():''}
+    ${csvSource==='calc'?(()=>{ // 【V183】非常勤医師は打刻時刻がそのまま給与に直結するため、長すぎる連続打刻は退勤打刻もれを疑う
+      const lp=rows.filter(r=>r.longPunch&&r.longPunch.length);
+      const n=lp.reduce((a,r)=>a+r.longPunch.length,0);
+      if(!n)return '';
+      return `<div class="note" style="border-color:#fcd34d;background:#fffbeb;color:#92400e">
+        ⚠ <b>非常勤医師の4時間以上の連続打刻 ${n}件</b>。退勤打刻もれの可能性があります（医師は休憩控除をしないため、そのまま勤務時間として集計されます）。「勤務状況の確認」タブでご確認ください。<br>
+        ${lp.map(r=>`<span style="display:inline-block;margin:3px 10px 0 0"><b>${r[1]}</b>: ${r.longPunch.map(d=>d.slice(5)).join('、')}</span>`).join('')}
       </div>`;})():''}
     <div style="overflow:auto;margin-top:10px;border:1px solid var(--line);border-radius:8px;max-height:520px">
       <table style="font-size:11px">
