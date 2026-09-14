@@ -2141,13 +2141,20 @@ function aggregateRangeRows(from,to,clinicFilter='all',unitFilter='all',q=''){
     let days=0,net=0,brk=0,ot=0,night=0,lateN=0,lateMin=0,earlyN=0,earlyMin=0,absent=0;
     const incomplete=[]; // 【V132】片方しか打刻が無い日（欠勤ではなく要修正）
     const groupClinic=(clinicFilter==='all')?staffPayrollClinic(s):clinicFilter;
-    const nb=NIGHT_BAND||(WAGE_BANDS[groupClinic]||WAGE_BANDS[s.loc]||[]).find(x=>x.label==='夜外来');
+    const nb=NIGHT_BAND||(WAGE_BANDS[groupClinic]||WAGE_BANDS[s.loc]||[]).find(x=>x.label==='夜外来'); // ※半有(午前休)の遅刻判定基準など、夜勤集計以外にも使う既存の割増時間帯
+    // 【v81修正】夜勤集計(「夜勤務」列)の対象は「非常勤の看護師・クラーク」のみ（常勤・医師は対象外）。
+    //   開始時刻は、シフト側の実際の夜外来開始16:00に合わせる（従来はWAGE_BANDSの18:00が既定値になっており、
+    //   シフト側16:00とズレて夜勤が0時間になるバグがあった。管理者が「割増時間帯」を設定していればそちらを優先）。
+    const staffUnit=CODE_UNIT[s.id]||s.unit||'';
+    const staffEmp=s.emp||'parttime';
+    const nightEligible=(staffUnit==='nurse'||staffUnit==='clerk')&&staffEmp==='parttime';
+    const nightBand=nightEligible?(NIGHT_BAND||{s:'16:00'}):null;
     Object.keys(log).filter(d=>inR(d)&&includeDateForClinic(s,d,clinicFilter)).forEach(d=>{
       const r=log[d];if(!r||!r.in||!r.out)return;
       const g=toMin(r.out)-toMin(r.in);if(g<=0)return;
       const b=autoBreak(g), nt=g-b;
       days++; net+=nt; brk+=b; ot+=Math.max(0,nt-480);
-      if(nb)night+=Math.max(0,toMin(r.out)-Math.max(toMin(r.in),toMin(nb.s||nb.start))); // 夜勤務=夜診開始以降の労働すべて（終了時刻で打ち切らない）
+      if(nightBand)night+=Math.max(0,toMin(r.out)-Math.max(toMin(r.in),toMin(nightBand.s||nightBand.start))); // 夜勤務=夜診開始(16:00)以降の労働すべて（終了時刻で打ち切らない）。対象は非常勤の看護師・クラークのみ
       const sh=plan?(plan[d]||null):(s.shift?{start:s.shift.s,end:s.shift.e}:null); // 予定表がある人は、予定のない日（休日出勤）を判定しない
       if(sh&&!s.noJudge){ // 【v80】noJudge職員（医師・手術担当等）は遅刻・早退を判定しない
         // 【V169】判定基準=コマの定時(jin/jout・マージン無し)＋TOL(5分)猶予＝画面の判定表示と同じ基準。
@@ -2242,6 +2249,12 @@ function personalDailyRows(code,from,to){
   const log=PUNCHLOG[code]||{}, plan=SHIFTPLAN[code]||{}, lv=LEAVEPLAN[code]||{};
   const W=['日','月','火','水','木','金','土'];
   const rows=[];
+  // 【v81修正】夜勤集計の対象は「非常勤の看護師・クラーク」のみ。開始16:00（aggregateRangeRowsと同じ基準）
+  const _pdrStaff=tcSearchPeople().find(x=>String(x.id)===String(code))||{};
+  const _pdrUnit=CODE_UNIT[code]||_pdrStaff.unit||'';
+  const _pdrEmp=_pdrStaff.emp||'parttime';
+  const _pdrNightEligible=(_pdrUnit==='nurse'||_pdrUnit==='clerk')&&_pdrEmp==='parttime';
+  const _pdrNightBand=_pdrNightEligible?(NIGHT_BAND||{s:'16:00'}):null;
   for(let dt=parseDateLocal(from);dateYMD(dt)<=to;dt=addDays(dt,1)){
     const d=dateYMD(dt);
     const r=log[d]||null, sh=plan[d]||null, leave=(lv&&lv[d])||'';
@@ -2255,7 +2268,7 @@ function personalDailyRows(code,from,to){
       if(g>0){b=autoBreak(g);net=g-b;ot=Math.max(0,net-480);
         if(sh)outside=Math.max(0,toMin(sh.start)-toMin(r.in))+Math.max(0,toMin(r.out)-toMin(sh.end));
         else outside=net;
-        const nb=NIGHT_BAND;if(nb)night=Math.max(0,Math.min(toMin(r.out),toMin(nb.e))-Math.max(toMin(r.in),toMin(nb.s)));
+        const nb=_pdrNightBand;if(nb)night=Math.max(0,toMin(r.out)-Math.max(toMin(r.in),toMin(nb.s||nb.start))); // 夜勤務=夜診開始(16:00)以降の労働すべて（終了時刻で打ち切らない）。対象は非常勤の看護師・クラークのみ
       }
     }
     rows.push({d,label:`${pad2(dt.getMonth()+1)}/${pad2(dt.getDate())}(${W[dow]})`,dow,status,
