@@ -3045,8 +3045,9 @@ function weeklyLegalRows(ym,toArg){
     const wk=dateYMD(mondayOfDate(parseDateLocal(date)));
     weeks[wk]=weeks[wk]||{};
     const key=String(code);
-    return weeks[wk][key]=weeks[wk][key]||{code:key,name:name||CODE_NAME[key]||key,plan:0,planSoFar:0,actual:0,daysPlan:new Set(),daysActual:new Set(),missing:[],working:false};
+    return weeks[wk][key]=weeks[wk][key]||{code:key,name:name||CODE_NAME[key]||key,emp:emp,plan:0,planSoFar:0,actual:0,daysPlan:new Set(),daysActual:new Set(),missing:[],working:false};
   };
+  let emp='';
   const isDone=r=>!!(r&&r.in&&r.out&&!(r.in2&&!r.out2)); // 退勤まで済んだ日（2回目の出勤だけで退勤前は「勤務中」）
   const isWorking=r=>!!(r&&((r.in&&!r.out)||(r.in2&&!r.out2)));
   people.forEach(s=>{
@@ -3054,6 +3055,7 @@ function weeklyLegalRows(ym,toArg){
     const name=s.name||CODE_NAME[code]||code;
     const unit=CODE_UNIT[code]||s.unit||'';
     const isDoc=unit==='doctor';
+    emp=s.emp||'parttime';
     const plan=SHIFTPLAN[code]||{};
     const log=PUNCHLOG[code]||{};
     Object.entries(plan).forEach(([date,sh])=>{
@@ -3094,6 +3096,7 @@ function weeklyLegalRows(ym,toArg){
         daysPlan:x.daysPlan.size,
         daysActual:x.daysActual.size,
         missing:x.missing.sort(),
+        emp:x.emp,
         working:x.working,
         cls:legalClass(Math.max(x.plan,x.actual)),
         status:legalText(Math.max(x.plan,x.actual))
@@ -3122,7 +3125,8 @@ function quickJudge(r){
   else if(Math.max(r.plan,r.actual)>=2280)out.push({lv:2,t:'週40時間に近い'});
   if(r.missing&&r.missing.length)out.push({lv:3,t:'打刻なし '+r.missing.length+'日'});
   if(pct!=null&&pct>120)out.push({lv:2,t:'予定より多い'});
-  if(pct!=null&&pct<80&&!(r.missing&&r.missing.length))out.push({lv:2,t:'予定より少ない'});
+  // 予定より少ない: パートは仕事が終われば退勤する運用なので黄。常勤は大きく短ければ赤（ユーザー要望: 常勤なのに極端に短い＝要確認）
+  if(pct!=null&&pct<80&&!(r.missing&&r.missing.length))out.push(r.emp==='fulltime'?{lv:3,t:'常勤なのに予定より少ない'}:{lv:2,t:'予定より少ない'});
   if(!ps&&a)out.push({lv:2,t:'予定外の勤務'});
   if(!out.length){
     if(r.working&&!ps)out.push({lv:1,t:'勤務中'});
